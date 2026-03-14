@@ -1,24 +1,54 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import MasterDetail from "../components/MasterDetail";
+import TorrentDetail from "../components/TorrentDetail";
+import { StatsDashboard } from "../components/StatsDashboard";
+import AddTorrentModal from "../components/AddTorrentModal";
+import { useAuth } from "../hooks/useAuth";
 import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
-import type { Torrent } from "../types";
-import {
-  formatBytes,
-  torrentStatusColor,
-  torrentStatusLabel,
-} from "../utils";
-import TorrentDetail from "../components/TorrentDetail";
-import AddTorrentModal from "../components/AddTorrentModal";
+import { getSettings } from "../api/settings";
+import type { Torrent, DownloadTask, AppSettings } from "../types";
+import { formatBytes, torrentStatusColor, torrentStatusLabel } from "../utils";
+
+function statusDotColor(status: string): string {
+  switch (status) {
+    case "downloaded":
+      return "#10b981";
+    case "downloading":
+      return "#3b82f6";
+    case "queued":
+    case "waiting_files_selection":
+    case "magnet_conversion":
+      return "#eab308";
+    case "error":
+    case "dead":
+    case "magnet_error":
+      return "#ef4444";
+    default:
+      return "#94a3b8";
+  }
+}
 
 export default function TorrentsPage() {
+  const { user } = useAuth();
   const [torrents, setTorrents] = useState<Torrent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const completedCountRef = useRef<number>(0);
+  const seenCompletedRef = useRef<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    torrentId: string;
+  } | null>(null);
+
+  // Force re-render when completedCount changes
+  const [, setTick] = useState(0);
 
   const fetchTorrents = useCallback(async () => {
     try {
@@ -33,306 +63,323 @@ export default function TorrentsPage() {
     }
   }, []);
 
+  // Fetch torrents on mount
   useEffect(() => {
     fetchTorrents();
   }, [fetchTorrents]);
 
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  // Fetch settings on mount
+  useEffect(() => {
+    getSettings().then(setSettings).catch(() => {});
+  }, []);
 
-  const selectAll = () => {
-    if (selected.size === readyTorrents.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(readyTorrents.map((t) => t.id)));
-    }
-  };
-
-  const readyTorrents = torrents.filter((t) => t.status === "downloaded");
-
-  const handleDownloadSelected = async () => {
-    if (selected.size === 0) return;
-    const folder = await open({ directory: true, title: "Select download folder" });
-    if (!folder) return;
-    setDownloading(true);
-    try {
-      for (const torrentId of selected) {
-        const torrent = torrents.find((t) => t.id === torrentId);
-        if (!torrent) continue;
-        const links = await downloadsApi.unrestrictTorrentLinks(torrentId);
-        if (links.length > 0) {
-          await downloadsApi.startDownloads(links, folder as string, torrent.filename);
+  // Poll download tasks every 3 seconds
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const tasks = await downloadsApi.getDownloadTasks();
+        setDownloadTasks(tasks);
+        // Check for newly completed
+        for (const task of tasks) {
+          if (
+            task.status === "Completed" &&
+            !seenCompletedRef.current.has(task.id)
+          ) {
+            seenCompletedRef.current.add(task.id);
+            completedCountRef.current += 1;
+            setTick((t) => t + 1);
+          }
         }
+      } catch {
+        // ignore
       }
-      setSelected(new Set());
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setDownloading(false);
-    }
-  };
+    };
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const handleDownloadAll = async () => {
-    if (readyTorrents.length === 0) return;
-    const folder = await open({ directory: true, title: "Select download folder" });
-    if (!folder) return;
-    setDownloading(true);
-    try {
-      for (const torrent of readyTorrents) {
-        const links = await downloadsApi.unrestrictTorrentLinks(torrent.id);
-        if (links.length > 0) {
-          await downloadsApi.startDownloads(links, folder as string, torrent.filename);
-        }
+  // Listen for refresh-list event
+  useEffect(() => {
+    const handler = () => fetchTorrents();
+    window.addEventListener("refresh-list", handler);
+    return () => window.removeEventListener("refresh-list", handler);
+  }, [fetchTorrents]);
+
+  // Listen for torrent-select event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.id) setSelectedId(detail.id);
+    };
+    window.addEventListener("torrent-select", handler);
+    return () => window.removeEventListener("torrent-select", handler);
+  }, []);
+
+  // Listen for deselect-item event
+  useEffect(() => {
+    const handler = () => setSelectedId(null);
+    window.addEventListener("deselect-item", handler);
+    return () => window.removeEventListener("deselect-item", handler);
+  }, []);
+
+  // Listen for delete-selected event
+  useEffect(() => {
+    const handler = () => {
+      if (selectedId && window.confirm("Delete this torrent?")) {
+        handleDelete(selectedId);
       }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setDownloading(false);
-    }
-  };
+    };
+    window.addEventListener("delete-selected", handler);
+    return () => window.removeEventListener("delete-selected", handler);
+  }, [selectedId]);
+
+  // Listen for action-selected event (download)
+  useEffect(() => {
+    const handler = () => {
+      if (selectedId) {
+        handleDownloadTorrent(selectedId);
+      }
+    };
+    window.addEventListener("action-selected", handler);
+    return () => window.removeEventListener("action-selected", handler);
+  }, [selectedId, settings]);
+
+  // Close context menu on click outside or Esc
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [contextMenu]);
 
   const handleDelete = async (id: string) => {
     try {
       await torrentsApi.deleteTorrent(id);
       setTorrents((prev) => prev.filter((t) => t.id !== id));
-      setSelected((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      if (selectedId === id) setSelectedId(null);
     } catch (e) {
       setError(String(e));
     }
   };
 
-  return (
-    <div className="p-6">
+  const handleDownloadTorrent = async (id: string) => {
+    const torrent = torrents.find((t) => t.id === id);
+    if (!torrent) return;
+    try {
+      let folder = settings?.download_folder ?? null;
+      if (!folder) {
+        const picked = await open({ directory: true, title: "Select download folder" });
+        if (!picked) return;
+        folder = picked as string;
+      }
+      const links = await downloadsApi.unrestrictTorrentLinks(id);
+      if (links.length > 0) {
+        await downloadsApi.startDownloads(links, folder, torrent.filename);
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const listPanel = (
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-zinc-100 tracking-tight">Torrents</h2>
-          <p className="text-sm text-zinc-500 mt-1">
-            {torrents.length} total &middot;{" "}
-            <span className="bg-rd-green/10 text-rd-green px-2 py-0.5 rounded-full text-xs font-medium">{readyTorrents.length} ready</span>
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center px-4 py-3 border-b border-[rgba(255,255,255,0.04)]">
+        <span className="text-[14px] font-semibold text-[#f1f5f9] tracking-[-0.2px]">
+          Torrents
+        </span>
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-rd-green text-black font-semibold rounded-lg hover:bg-green-400 text-sm transition-all duration-150 shadow-lg shadow-rd-green/20"
+            className="bg-[#10b981] hover:bg-[#34d399] text-white rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Add Torrent
+            + Add
           </button>
           <button
             onClick={fetchTorrents}
-            className="flex items-center gap-2 px-4 py-2 bg-rd-card border border-rd-border rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-all duration-150"
+            className="text-[#475569] hover:text-[#94a3b8] hover:bg-[rgba(255,255,255,0.04)] rounded-md p-1.5 transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
-            Refresh
           </button>
         </div>
       </div>
 
-      {/* Action bar */}
-      {readyTorrents.length > 0 && (
-        <div className="flex items-center gap-3 mb-6 px-4 py-3 card-base">
-          <button
-            onClick={selectAll}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-rd-surface border border-rd-border rounded-lg text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-all duration-150"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 11 12 14 22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
-            {selected.size === readyTorrents.length ? "Deselect All" : "Select All"}
-          </button>
-
-          <div className="h-5 w-px bg-rd-border" />
-
-          <button
-            onClick={handleDownloadSelected}
-            disabled={selected.size === 0 || downloading}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg hover:bg-blue-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            {downloading ? "Starting..." : `Download Selected (${selected.size})`}
-          </button>
-
-          <button
-            onClick={handleDownloadAll}
-            disabled={downloading}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-rd-green/20 border border-rd-green/30 text-rd-green rounded-lg hover:bg-rd-green/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download All Ready
-          </button>
-        </div>
-      )}
-
       {/* Error */}
       {error && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400 flex items-center gap-3">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="15" y1="9" x2="9" y2="15" />
-            <line x1="9" y1="9" x2="15" y2="15" />
-          </svg>
+        <div className="px-4 py-2 text-[12px] text-[#ef4444] bg-[rgba(239,68,68,0.06)]">
           {error}
         </div>
       )}
 
-      {/* Torrent list */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <div className="w-8 h-8 border-2 border-rd-green/30 border-t-rd-green rounded-full animate-spin mb-4" />
-          <p className="text-zinc-500 text-sm">Loading torrents...</p>
-        </div>
-      ) : torrents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <div className="w-16 h-16 rounded-2xl bg-rd-card border border-rd-border flex items-center justify-center mb-4">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
+      {/* List */}
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-[rgba(16,185,129,0.3)] border-t-[#10b981] rounded-full animate-spin" />
           </div>
-          <p className="text-zinc-400 font-medium mb-1">No torrents yet</p>
-          <p className="text-zinc-600 text-sm mb-4">Search for torrents or add a magnet link to get started</p>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="text-rd-green text-sm font-medium hover:underline"
-          >
-            Add your first torrent
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {torrents.map((torrent) => (
-            <div
-              key={torrent.id}
-              className={`group flex items-center gap-4 px-5 py-4 rounded-xl border transition-all duration-150 cursor-pointer ${
-                selected.has(torrent.id)
-                  ? "card-base bg-rd-green/[0.06] border-rd-green/40 shadow-[0_0_20px_rgba(120,190,32,0.1)]"
-                  : "card-base"
-              }`}
-              onClick={() => setDetailId(torrent.id)}
-            >
-              {/* Checkbox */}
-              {torrent.status === "downloaded" && (
-                <input
-                  type="checkbox"
-                  checked={selected.has(torrent.id)}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    toggleSelect(torrent.id);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              )}
+        ) : torrents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <p className="text-[#475569] text-[13px]">No torrents yet</p>
+            <p className="text-[#374151] text-[12px] mt-1">
+              Add a magnet link or torrent file to get started
+            </p>
+          </div>
+        ) : (
+          torrents.map((torrent) => {
+            const isSelected = selectedId === torrent.id;
+            const dotColor = statusDotColor(torrent.status);
+            const showProgress =
+              torrent.status === "downloading" &&
+              torrent.progress > 0 &&
+              torrent.progress < 100;
 
-              {/* Status indicator */}
+            return (
               <div
-                className={`w-2 h-2 rounded-full shrink-0 ${
-                  torrent.status === "downloaded"
-                    ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.4)]"
-                    : torrent.status === "downloading"
-                      ? "bg-blue-400 animate-pulse glow-dot-active"
-                      : torrent.status === "error" || torrent.status === "magnet_error" || torrent.status === "dead"
-                        ? "bg-red-400"
-                        : "bg-yellow-400"
+                key={torrent.id}
+                className={`flex items-center gap-3 px-4 cursor-pointer transition-colors duration-150 ${
+                  isSelected
+                    ? "border-l-2 border-[#10b981] bg-[rgba(16,185,129,0.04)]"
+                    : "border-l-2 border-transparent hover:bg-[rgba(255,255,255,0.03)]"
                 }`}
-              />
+                style={{ minHeight: "44px" }}
+                onClick={() => setSelectedId(torrent.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    torrentId: torrent.id,
+                  });
+                }}
+              >
+                {/* Status dot */}
+                <div
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: dotColor }}
+                />
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-200 truncate group-hover:text-zinc-100">
-                  {torrent.filename}
-                </p>
-                <div className="flex items-center gap-3 mt-1.5">
+                {/* Filename */}
+                <div className="flex-1 min-w-0 py-2">
+                  <div className="text-[13px] font-medium text-[#f1f5f9] truncate">
+                    {torrent.filename}
+                  </div>
+                  {showProgress && (
+                    <div className="mt-1 h-0.5 rounded-full bg-[rgba(59,130,246,0.08)]">
+                      <div
+                        className="h-0.5 bg-[#3b82f6] rounded-full transition-all duration-500"
+                        style={{ width: `${torrent.progress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Right side info */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] text-[#475569]">
+                    {formatBytes(torrent.bytes)}
+                  </span>
                   <span
-                    className={`text-xs font-medium ${torrentStatusColor(torrent.status)}`}
+                    className={`text-[11px] ${torrentStatusColor(torrent.status)}`}
                   >
                     {torrentStatusLabel(torrent.status)}
                   </span>
-                  <span className="text-xs text-zinc-500">
-                    {formatBytes(torrent.bytes)}
-                  </span>
-                  <span className="text-xs text-zinc-600">
-                    {torrent.links.length} file{torrent.links.length !== 1 ? "s" : ""}
-                  </span>
-                  {torrent.speed != null && torrent.speed > 0 && (
-                    <span className="text-xs text-blue-400">
-                      {formatBytes(torrent.speed)}/s
-                    </span>
-                  )}
                 </div>
-                {/* Progress bar */}
-                {torrent.progress > 0 && torrent.progress < 100 && (
-                  <div className="mt-2 h-1 bg-rd-darker rounded-full overflow-hidden">
-                    <div
-                      className="h-full progress-bar-blue rounded-full transition-all duration-500"
-                      style={{ width: `${torrent.progress}%` }}
-                    />
-                  </div>
-                )}
               </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 
-              {/* Delete button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(torrent.id);
-                }}
-                className="shrink-0 p-2 rounded-lg text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] transition-all duration-150"
-                title="Delete torrent"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+  const detailPanel = selectedId ? (
+    <TorrentDetail torrentId={selectedId} onRefresh={fetchTorrents} />
+  ) : (
+    <StatsDashboard
+      user={user}
+      downloadTasks={downloadTasks}
+      settings={settings}
+      completedCount={completedCountRef.current}
+    />
+  );
 
-      {/* Detail modal */}
-      {detailId && (
-        <TorrentDetail
-          torrentId={detailId}
-          onClose={() => setDetailId(null)}
-          onRefresh={fetchTorrents}
-        />
-      )}
+  return (
+    <>
+      <MasterDetail listPanel={listPanel} detailPanel={detailPanel} />
 
-      {/* Add modal */}
       {showAdd && (
         <AddTorrentModal
           onClose={() => setShowAdd(false)}
           onAdded={fetchTorrents}
         />
       )}
-    </div>
+
+      {contextMenu && (
+        <div
+          className="fixed bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-lg py-1 w-44 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full text-left px-3 py-2 text-[13px] text-[#f1f5f9] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+            onClick={() => {
+              const id = contextMenu.torrentId;
+              setContextMenu(null);
+              handleDownloadTorrent(id);
+            }}
+          >
+            Download
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-[13px] text-[#ef4444] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+            onClick={() => {
+              const id = contextMenu.torrentId;
+              setContextMenu(null);
+              if (window.confirm("Delete this torrent?")) {
+                handleDelete(id);
+              }
+            }}
+          >
+            Delete
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-[13px] text-[#f1f5f9] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+            onClick={() => {
+              const torrent = torrents.find(
+                (t) => t.id === contextMenu.torrentId
+              );
+              setContextMenu(null);
+              if (torrent) {
+                navigator.clipboard.writeText(
+                  "magnet:?xt=urn:btih:" + torrent.hash
+                );
+              }
+            }}
+          >
+            Copy Magnet
+          </button>
+        </div>
+      )}
+    </>
   );
 }
