@@ -146,3 +146,29 @@ export interface AppSettings {
   create_torrent_subfolders: boolean;
   theme: string;
 }
+
+// ── Search ──
+
+export interface SearchResult {
+  title: string;
+  magnet: string;
+  info_hash: string;
+  size_bytes: number;
+  size_display: string;
+  seeders: number;
+  leechers: number;
+  date: string;
+  source: string;
+  category: string;
+}
+
+export interface TrackerStatus {
+  name: string;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  tracker_status: TrackerStatus[];
+}
