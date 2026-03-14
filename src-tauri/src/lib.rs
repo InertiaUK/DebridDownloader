@@ -1,6 +1,7 @@
 mod api;
 mod commands;
 mod downloader;
+mod scrapers;
 mod state;
 
 use state::AppState;
