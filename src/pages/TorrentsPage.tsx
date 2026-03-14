@@ -109,8 +109,8 @@ export default function TorrentsPage() {
   // Listen for torrent-select event
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.id) setSelectedId(detail.id);
+      const id = (e as CustomEvent).detail;
+      setSelectedId(id);
     };
     window.addEventListener("torrent-select", handler);
     return () => window.removeEventListener("torrent-select", handler);
