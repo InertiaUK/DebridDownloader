@@ -1,0 +1,122 @@
+use crate::api::client::RdClient;
+use crate::state::{DownloadStatus, DownloadTask};
+use futures::StreamExt;
+use serde::Serialize;
+use std::path::PathBuf;
+use tauri::{AppHandle, Emitter};
+use tokio::io::AsyncWriteExt;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloadProgress {
+    pub id: String,
+    pub filename: String,
+    pub downloaded_bytes: i64,
+    pub total_bytes: i64,
+    pub speed: f64,
+    pub status: DownloadStatus,
+}
+
+pub async fn download_file(
+    app: AppHandle,
+    client: &RdClient,
+    task: &mut DownloadTask,
+    cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+) -> Result<(), String> {
+    let dest_path = PathBuf::from(&task.destination);
+
+    // Create parent directories
+    if let Some(parent) = dest_path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    let resp = client
+        .download_stream(&task.url)
+        .await
+        .map_err(|e| format!("Failed to start download: {}", e))?;
+
+    let total = resp.content_length().unwrap_or(task.total_bytes as u64) as i64;
+    task.total_bytes = total;
+    task.status = DownloadStatus::Downloading;
+    task.downloaded_bytes = 0;
+
+    emit_progress(&app, task);
+
+    let mut file = tokio::fs::File::create(&dest_path)
+        .await
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    let mut stream = resp.bytes_stream();
+    let mut downloaded: i64 = 0;
+    let mut last_emit = std::time::Instant::now();
+    let mut speed_bytes: i64 = 0;
+    let mut speed_start = std::time::Instant::now();
+
+    loop {
+        tokio::select! {
+            chunk = stream.next() => {
+                match chunk {
+                    Some(Ok(bytes)) => {
+                        file.write_all(&bytes).await.map_err(|e| format!("Write error: {}", e))?;
+                        downloaded += bytes.len() as i64;
+                        speed_bytes += bytes.len() as i64;
+                        task.downloaded_bytes = downloaded;
+
+                        // Calculate speed every second
+                        let elapsed = speed_start.elapsed().as_secs_f64();
+                        if elapsed >= 1.0 {
+                            task.speed = speed_bytes as f64 / elapsed;
+                            speed_bytes = 0;
+                            speed_start = std::time::Instant::now();
+                        }
+
+                        // Emit progress at most every 100ms
+                        if last_emit.elapsed().as_millis() >= 100 {
+                            emit_progress(&app, task);
+                            last_emit = std::time::Instant::now();
+                        }
+                    }
+                    Some(Err(e)) => {
+                        task.status = DownloadStatus::Failed(e.to_string());
+                        emit_progress(&app, task);
+                        return Err(format!("Download stream error: {}", e));
+                    }
+                    None => {
+                        // Stream complete
+                        break;
+                    }
+                }
+            }
+            _ = cancel_rx.changed() => {
+                if *cancel_rx.borrow() {
+                    task.status = DownloadStatus::Cancelled;
+                    emit_progress(&app, task);
+                    // Clean up partial file
+                    let _ = tokio::fs::remove_file(&dest_path).await;
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    file.flush().await.map_err(|e| format!("Flush error: {}", e))?;
+
+    task.status = DownloadStatus::Completed;
+    task.speed = 0.0;
+    emit_progress(&app, task);
+
+    Ok(())
+}
+
+fn emit_progress(app: &AppHandle, task: &DownloadTask) {
+    let progress = DownloadProgress {
+        id: task.id.clone(),
+        filename: task.filename.clone(),
+        downloaded_bytes: task.downloaded_bytes,
+        total_bytes: task.total_bytes,
+        speed: task.speed,
+        status: task.status.clone(),
+    };
+    let _ = app.emit("download-progress", &progress);
+}
