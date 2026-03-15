@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import DataTable, { type Column } from "../components/DataTable";
 import TableToolbar from "../components/TableToolbar";
 import SlideOverPanel from "../components/SlideOverPanel";
@@ -191,7 +191,7 @@ export default function CompletedPage() {
             <div className="px-6 py-4 border-t border-[var(--theme-border)] flex gap-2.5">
               {selectedTask.destination && (
                 <button
-                  onClick={() => openPath(selectedTask.destination).catch(() => {})}
+                  onClick={() => revealItemInDir(selectedTask.destination).catch(() => {})}
                   className="flex-1 py-3 rounded-[10px] text-white text-[15px] font-semibold transition-colors"
                   style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
                 >
@@ -227,7 +227,7 @@ export default function CompletedPage() {
                 {menuTask?.destination && (
                   <button
                     className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
-                    onClick={() => { setContextMenu(null); openPath(menuTask.destination).catch(() => {}); }}
+                    onClick={() => { setContextMenu(null); revealItemInDir(menuTask.destination).catch(() => {}); }}
                   >
                     Reveal in Finder
                   </button>
