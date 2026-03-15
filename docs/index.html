@@ -554,6 +554,15 @@ footer a:hover { color: var(--green); }
 
   <script>
 (function() {
+  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.0.0/';
+  var LATEST = 'https://github.com/CasaVargas/DebridDownloader/releases/latest';
+
+  var directLinks = {
+    mac: BASE + 'DebridDownloader_0.1.0_aarch64.dmg',
+    win: BASE + 'DebridDownloader_0.1.0_x64-setup.exe',
+    linux: BASE + 'DebridDownloader_0.1.0_amd64.deb'
+  };
+
   function detectOS() {
     if (navigator.userAgentData && navigator.userAgentData.platform) {
       var p = navigator.userAgentData.platform.toLowerCase();
@@ -571,18 +580,23 @@ footer a:hover { color: var(--green); }
   var os = detectOS();
   var labels = { mac: 'Download for macOS', win: 'Download for Windows', linux: 'Download for Linux' };
 
-  // Hero button
+  // Hero button — direct download link
+  var heroBtn = document.getElementById('hero-download');
   if (os && labels[os]) {
     document.getElementById('hero-download-label').textContent = labels[os];
-    var icon = document.querySelector('#hero-download .os-icon[data-os="' + os + '"]');
+    heroBtn.href = directLinks[os];
+    var icon = heroBtn.querySelector('.os-icon[data-os="' + os + '"]');
     if (icon) icon.classList.add('visible');
   }
 
-  // Download cards
+  // Download cards — direct download links
+  var cardLinks = { mac: BASE + 'DebridDownloader_0.1.0_aarch64.dmg', win: BASE + 'DebridDownloader_0.1.0_x64-setup.exe', linux: BASE + 'DebridDownloader_0.1.0_amd64.deb' };
   var cards = document.querySelectorAll('.dl-card[data-os]');
   var found = false;
   cards.forEach(function(card) {
-    if (!found && card.getAttribute('data-os') === os) {
+    var cardOS = card.getAttribute('data-os');
+    if (cardLinks[cardOS]) card.href = cardLinks[cardOS];
+    if (!found && cardOS === os) {
       found = true;
       card.classList.add('recommended');
       var badge = document.createElement('div');
@@ -592,9 +606,11 @@ footer a:hover { color: var(--green); }
     }
   });
 
-  // Bottom CTA
+  // Bottom CTA — direct download link
+  var ctaBtn = document.getElementById('cta-download');
   if (os && labels[os]) {
     document.getElementById('cta-download-label').textContent = labels[os];
+    ctaBtn.href = directLinks[os];
   }
 })();
   </script>
