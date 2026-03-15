@@ -91,32 +91,48 @@ export default function SettingsPage() {
 
   async function handleAddTracker() {
     if (!newTrackerName.trim() || !newTrackerUrl.trim()) return;
+    let url = newTrackerUrl.trim().replace(/\/+$/, "");
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
     const config: TrackerConfig = {
       id: crypto.randomUUID(),
       name: newTrackerName.trim(),
-      url: newTrackerUrl.trim().replace(/\/+$/, ""),
+      url,
       tracker_type: newTrackerType,
       enabled: true,
     };
     const next = [...trackers, config];
     setTrackers(next);
-    await saveTrackerConfigs(next).catch(() => {});
+    try {
+      await saveTrackerConfigs(next);
+      markSaved("trackers");
+    } catch (e) {
+      console.error("Failed to save tracker configs:", e);
+    }
     setNewTrackerName("");
     setNewTrackerUrl("");
-    markSaved("trackers");
   }
 
   async function handleRemoveTracker(id: string) {
     const next = trackers.filter((t) => t.id !== id);
     setTrackers(next);
-    await saveTrackerConfigs(next).catch(() => {});
-    markSaved("trackers");
+    try {
+      await saveTrackerConfigs(next);
+      markSaved("trackers");
+    } catch (e) {
+      console.error("Failed to save tracker configs:", e);
+    }
   }
 
   async function handleToggleTracker(id: string) {
     const next = trackers.map((t) => t.id === id ? { ...t, enabled: !t.enabled } : t);
     setTrackers(next);
-    await saveTrackerConfigs(next).catch(() => {});
+    try {
+      await saveTrackerConfigs(next);
+    } catch (e) {
+      console.error("Failed to save tracker configs:", e);
+    }
   }
 
   async function handleBrowse() {
