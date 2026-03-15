@@ -1,5 +1,4 @@
 pub mod piratebay;
-pub mod thirteen37x;
 
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -106,7 +105,6 @@ fn build_scrapers(configs: &[TrackerConfig]) -> Vec<Box<dyn TorrentScraper>> {
         .filter_map(|config| -> Option<Box<dyn TorrentScraper>> {
             match config.tracker_type.as_str() {
                 "piratebay_api" => Some(Box::new(piratebay::PirateBayScraper::new(config.url.clone()))),
-                "1337x" => Some(Box::new(thirteen37x::Thirteen37xScraper::new(config.url.clone()))),
                 _ => None,
             }
         })
