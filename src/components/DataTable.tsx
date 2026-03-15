@@ -74,7 +74,7 @@ export default function DataTable<T>({
   }
 
   return (
-    <div className="flex-1 overflow-auto px-7">
+    <div className="flex-1 overflow-auto" style={{ paddingLeft: "28px", paddingRight: "80px" }}>
       {/* Header */}
       <div
         className="sticky top-0 z-10"
