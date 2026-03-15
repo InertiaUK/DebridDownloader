@@ -245,5 +245,5 @@ MIT — do whatever you want with it.
 <p align="center">
   <b>Made with 🦀 Rust + ⚛️ React + 💚 Real-Debrid</b>
   <br>
-  <sub>Built by <a href="https://github.com/prjoni99">Jonathan Vargas</a></sub>
+  <sub>Built by <a href="https://casavargas.app">Casa Vargas</a></sub>
 </p>
