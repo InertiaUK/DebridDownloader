@@ -35,7 +35,7 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "signingIdentity": "Apple Development: Jonathan Vargas (4JQT5BXA8Q)",
+      "signingIdentity": "Developer ID Application: Jonathan Vargas (53MUTM55LC)",
       "entitlements": "Entitlements.plist"
     }
   }
