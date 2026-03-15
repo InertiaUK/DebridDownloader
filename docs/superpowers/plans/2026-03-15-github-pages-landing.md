@@ -26,7 +26,7 @@ Create `docs/index.html` with:
 - `<meta charset>`, `<meta viewport>`, `<meta theme-color content="#0a0a0a">`
 - `<title>DebridDownloader — Fast Desktop Client for Real-Debrid</title>`
 - `<meta name="description" content="A blazing-fast native desktop client for managing torrents and downloads through Real-Debrid. Built with Tauri, React, and Rust.">`
-- Open Graph tags: `og:title`, `og:description`, `og:type` (website), `og:url` (https://prjoni99.github.io/DebridDownloader/). Omit `og:image` for now (add later when a social card image exists — an empty content attr is invalid)
+- Open Graph tags: `og:title`, `og:description`, `og:type` (website), `og:url` (https://CasaVargas.github.io/DebridDownloader/). Omit `og:image` for now (add later when a social card image exists — an empty content attr is invalid)
 - Twitter card: `twitter:card` (summary_large_image), `twitter:title`, `twitter:description`
 - Inline SVG favicon (lightning bolt) via `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">`
 - Empty `<style>` block
@@ -262,7 +262,7 @@ Inside `<header id="hero" class="hero">`:
 - `<h1>DebridDownloader</h1>`
 - `<p class="tagline">Blazing-fast desktop client for Real-Debrid</p>`
 - `<p class="subtext">Manage torrents and downloads with a native app built on Rust + React</p>`
-- `<a id="hero-download" class="download-btn" href="https://github.com/prjoni99/DebridDownloader/releases/latest">` containing:
+- `<a id="hero-download" class="download-btn" href="https://github.com/CasaVargas/DebridDownloader/releases/latest">` containing:
   - 3 platform SVG icons (Apple, Windows, Linux) each with class `os-icon` and `data-os="mac|win|linux"`, all initially hidden via CSS (`display:none`)
   - A `<span id="hero-download-label">Download on GitHub</span>` (JS will update text and show the right icon)
 - `<a class="other-platforms" href="#downloads">Other platforms ↓</a>`
@@ -308,7 +308,7 @@ Inside `<section id="downloads" class="section">`:
   1. macOS (Apple Silicon) row: Apple SVG icon, "macOS" name, "Apple Silicon (M1/M2/M3/M4)" arch, `.dmg` link, `data-os="mac"`
   2. macOS (Intel) row: Apple SVG icon, "macOS" name, "Intel" arch, `.dmg` link, `data-os="mac"`
   3. Windows row: Windows SVG icon, "Windows" name, "x64" arch, `.exe installer` link, `data-os="win"`
-- Each row: `<a href="https://github.com/prjoni99/DebridDownloader/releases/latest" class="download-row" data-os="mac|win">`
+- Each row: `<a href="https://github.com/CasaVargas/DebridDownloader/releases/latest" class="download-row" data-os="mac|win">`
 - The `data-os` attribute is used by JS to add `.recommended` class and "Recommended for you" badge
 - Use the same Apple/Windows SVG icons from the hero button (same simplified paths)
 
@@ -318,7 +318,7 @@ Tech strip inside `<div class="tech-strip">`:
 - 5 `<span>` elements: Tauri, React, Rust, TypeScript, Tailwind CSS (text only, no logos needed)
 
 Footer:
-- "Built by <a href="https://github.com/prjoni99">Jonathan Vargas</a> · <a href="https://github.com/prjoni99/DebridDownloader">GitHub</a> · MIT License"
+- "Built by <a href="https://github.com/CasaVargas">Jonathan Vargas</a> · <a href="https://github.com/CasaVargas/DebridDownloader">GitHub</a> · MIT License"
 
 ### Task 4: Add JavaScript for platform detection
 
@@ -411,9 +411,9 @@ In the GitHub repo settings (Settings → Pages), set:
 
 Or via CLI:
 ```bash
-gh api repos/prjoni99/DebridDownloader/pages -X POST -f source.branch=main -f source.path=/docs 2>/dev/null || gh api repos/prjoni99/DebridDownloader/pages -X PUT -f source.branch=main -f source.path=/docs
+gh api repos/CasaVargas/DebridDownloader/pages -X POST -f source.branch=main -f source.path=/docs 2>/dev/null || gh api repos/CasaVargas/DebridDownloader/pages -X PUT -f source.branch=main -f source.path=/docs
 ```
 
 - [ ] **Step 20: Verify deployment**
 
-After pushing, confirm the site is live at `https://prjoni99.github.io/DebridDownloader/`
+After pushing, confirm the site is live at `https://CasaVargas.github.io/DebridDownloader/`

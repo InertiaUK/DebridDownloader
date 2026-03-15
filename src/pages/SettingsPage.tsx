@@ -349,7 +349,7 @@ export default function SettingsPage() {
                   <div className="text-[13px] text-[var(--theme-text-ghost)]">
                     <div className="p-3 rounded-lg" style={{ background: "var(--theme-bg-content)" }}>
                       <p>Enter the base URL of a site with a TPB-compatible JSON API. The app queries <code className="text-[var(--theme-text-muted)] px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>/q.php?q=search_term</code> and expects a JSON array of results with fields: name, info_hash, seeders, leechers, size, added, category.</p>
-                      <p className="mt-2 text-[var(--theme-text-muted)]">Need help finding compatible sources? Check the <a href="https://github.com/prjoni99/DebridDownloader/discussions" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>community discussions</a>.</p>
+                      <p className="mt-2 text-[var(--theme-text-muted)]">Need help finding compatible sources? Check the <a href="https://github.com/CasaVargas/DebridDownloader/discussions" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>community discussions</a>.</p>
                     </div>
                   </div>
                 </div>

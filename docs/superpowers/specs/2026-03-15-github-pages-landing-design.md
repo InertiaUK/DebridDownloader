@@ -18,7 +18,7 @@ A single-file static landing page (`docs/index.html`) for DebridDownloader, serv
   - Shows platform-specific label: "Download for macOS" / "Download for Windows" / "Download for Linux"
   - **Fallback**: If detection fails or OS is unrecognized, show generic "Download on GitHub" linking to the releases page
   - Platform-appropriate inline SVG icon (Apple, Windows, Linux)
-  - All download links point to `https://github.com/prjoni99/DebridDownloader/releases/latest` — the user picks the right asset from the release page
+  - All download links point to `https://github.com/CasaVargas/DebridDownloader/releases/latest` — the user picks the right asset from the release page
   - Small "Other platforms ↓" text link below, smooth-scrolls to `#downloads` section
 - **Animation**: Soft pulsing green CSS glow behind hero text (`@keyframes` pulse on a pseudo-element). Respects `prefers-reduced-motion: reduce` by disabling the animation.
 
@@ -62,7 +62,7 @@ A single-file static landing page (`docs/index.html`) for DebridDownloader, serv
 - Muted text/icons, not prominent — credibility, not hero
 
 #### Footer
-- "Built by Jonathan Vargas" with link to `https://github.com/prjoni99`
+- "Built by Jonathan Vargas" with link to `https://github.com/CasaVargas`
 - GitHub repo link
 - "MIT License" (update if license changes)
 - Single line, minimal

@@ -38,11 +38,11 @@
 
 <table>
 <tr><th>Platform</th><th>Architecture</th><th>Download</th></tr>
-<tr><td>🍎 macOS</td><td>Apple Silicon (M1/M2/M3/M4)</td><td><a href="https://github.com/prjoni99/DebridDownloader/releases/latest"><code>.dmg</code></a></td></tr>
-<tr><td>🍎 macOS</td><td>Intel</td><td><a href="https://github.com/prjoni99/DebridDownloader/releases/latest"><code>.dmg</code></a></td></tr>
-<tr><td>🪟 Windows</td><td>x64</td><td><a href="https://github.com/prjoni99/DebridDownloader/releases/latest"><code>.exe</code> installer</a></td></tr>
-<tr><td>🪟 Windows</td><td>ARM64</td><td><a href="https://github.com/prjoni99/DebridDownloader/releases/latest"><code>.exe</code> installer</a></td></tr>
-<tr><td>🐧 Linux</td><td>x64</td><td><a href="https://github.com/prjoni99/DebridDownloader/releases/latest"><code>.deb</code> / <code>.AppImage</code></a></td></tr>
+<tr><td>🍎 macOS</td><td>Apple Silicon (M1/M2/M3/M4)</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.dmg</code></a></td></tr>
+<tr><td>🍎 macOS</td><td>Intel</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.dmg</code></a></td></tr>
+<tr><td>🪟 Windows</td><td>x64</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.exe</code> installer</a></td></tr>
+<tr><td>🪟 Windows</td><td>ARM64</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.exe</code> installer</a></td></tr>
+<tr><td>🐧 Linux</td><td>x64</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.deb</code> / <code>.AppImage</code></a></td></tr>
 </table>
 
 ---
@@ -151,7 +151,7 @@ The app is a neutral tool. Users are responsible for how they use it and what so
 ### Setup
 
 ```bash
-git clone https://github.com/prjoni99/DebridDownloader.git
+git clone https://github.com/CasaVargas/DebridDownloader.git
 cd DebridDownloader
 npm install
 ```
