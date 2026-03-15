@@ -253,7 +253,7 @@ export default function TorrentsPage() {
     {
       key: "actions",
       header: "",
-      width: "70px",
+      width: "80px",
       render: (t) => (
         <div className="flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
           {t.status === "downloaded" && (
@@ -297,7 +297,7 @@ export default function TorrentsPage() {
         actions={
           <button
             onClick={() => setShowAdd(true)}
-            className="text-white rounded-lg px-5 py-2.5 text-[14px] font-medium transition-colors"
+            className="text-white rounded-lg px-5 py-2.5 text-[14px] font-medium transition-colors shrink-0 whitespace-nowrap"
             style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
           >
             + Add
@@ -467,7 +467,10 @@ export default function TorrentsPage() {
       {contextMenu && (
         <div
           className="fixed bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 220),
+            top: Math.min(contextMenu.y, window.innerHeight - 160),
+          }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
