@@ -75,6 +75,24 @@ export function torrentStatusLabel(status: string): string {
   }
 }
 
+export function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+
+  if (diffDays < 1) {
+    if (diffHr >= 1) return `${diffHr} hour${diffHr !== 1 ? "s" : ""} ago`;
+    if (diffMin >= 1) return `${diffMin} min ago`;
+    return "just now";
+  }
+  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function getDownloadStatusText(
   status: import("./types").DownloadStatus
 ): string {

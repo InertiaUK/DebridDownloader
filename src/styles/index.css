@@ -14,6 +14,7 @@
   --color-text-secondary: #94a3b8;
   --color-text-muted: #475569;
   --color-text-ghost: #374151;
+  --color-noir-sidebar: #07070d;
   --color-status-ready: #10b981;
   --color-status-active: #3b82f6;
   --color-status-queued: #eab308;
@@ -36,12 +37,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.1px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -64,8 +65,8 @@ body {
 /* Custom checkbox */
 input[type="checkbox"] {
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 2px solid #374151;
   border-radius: 5px;
   background: #08080f;
@@ -114,6 +115,11 @@ select {
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes shimmer {

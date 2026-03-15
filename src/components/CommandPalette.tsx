@@ -185,7 +185,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
       style={{ animation: "fade-in 0.15s ease" }}
     >
       <div
-        className="w-[560px] max-h-[420px] bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col"
+        className="w-[620px] max-h-[480px] bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col"
         style={{ animation: "slide-up 0.15s ease" }}
       >
         {/* Input */}
@@ -197,14 +197,14 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
           onKeyDown={handleKeyDown}
           placeholder="Search torrents or paste magnet..."
           autoFocus
-          className="text-[15px] text-[#f1f5f9] bg-transparent w-full px-4 py-3.5 border-b border-[rgba(255,255,255,0.04)] outline-none placeholder:text-[#374151]"
+          className="text-[16px] text-[#f1f5f9] bg-transparent w-full px-5 py-4 border-b border-[rgba(255,255,255,0.04)] outline-none placeholder:text-[#374151]"
         />
 
         {/* Mode tabs */}
-        <div className="flex gap-1 px-4 py-2 border-b border-[rgba(255,255,255,0.04)]">
+        <div className="flex gap-1 px-5 py-2.5 border-b border-[rgba(255,255,255,0.04)]">
           <button
             onClick={() => setMode("search")}
-            className={`px-3 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
+            className={`px-3 py-1.5 rounded-md text-[13px] font-medium cursor-pointer transition-colors ${
               mode === "search"
                 ? "bg-[rgba(16,185,129,0.08)] text-[#10b981]"
                 : "text-[#475569] hover:text-[#94a3b8]"
@@ -214,7 +214,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
           </button>
           <button
             onClick={() => setMode("local")}
-            className={`px-3 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
+            className={`px-3 py-1.5 rounded-md text-[13px] font-medium cursor-pointer transition-colors ${
               mode === "local"
                 ? "bg-[rgba(16,185,129,0.08)] text-[#10b981]"
                 : "text-[#475569] hover:text-[#94a3b8]"
@@ -227,7 +227,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
         {/* Results area */}
         <div className="flex-1 overflow-y-auto">
           {error && (
-            <div className="text-[#ef4444] text-[13px] px-4 py-2">{error}</div>
+            <div className="text-[#ef4444] text-[15px] px-5 py-3">{error}</div>
           )}
 
           {loading && (
@@ -235,7 +235,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="bg-[rgba(255,255,255,0.03)] h-10 mx-4 my-1 rounded-md"
+                  className="bg-[rgba(255,255,255,0.03)] h-12 mx-5 my-1 rounded-md"
                   style={{
                     animation: "shimmer 1.5s infinite",
                     backgroundSize: "200% 100%",
@@ -249,13 +249,13 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
 
           {!loading && !error && query.trim() === "" && mode === "search" && (
             <div className="flex items-center justify-center h-full py-12">
-              <span className="text-[#374151] text-[13px]">Type to search...</span>
+              <span className="text-[#374151] text-[15px]">Type to search...</span>
             </div>
           )}
 
           {!loading && !error && query.trim() !== "" && displayResults.length === 0 && (
             <div className="flex items-center justify-center h-full py-12">
-              <span className="text-[#475569] text-[13px]">No results found</span>
+              <span className="text-[#475569] text-[15px]">No results found</span>
             </div>
           )}
 
@@ -270,9 +270,9 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
                   return (
                     <div
                       key={result.info_hash}
-                      className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-[#10b981]"
+                      className="flex items-center gap-3 px-5 py-3 text-[15px] text-[#10b981]"
                     >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                      <svg width="16" height="16" viewBox="0 0 14 14" fill="none" className="shrink-0">
                         <path d="M2 7.5L5.5 11L12 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                       Added!
@@ -291,14 +291,14 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
                   <div
                     key={result.info_hash}
                     onClick={() => !isAdding && handleAddTorrent(result)}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors text-[13px] ${
+                    className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors text-[15px] ${
                       index === selectedIndex ? "bg-[rgba(255,255,255,0.03)]" : ""
                     }`}
                   >
                     <span className="text-[#f1f5f9] truncate flex-1">
                       {result.title}
                     </span>
-                    <span className="text-[10px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded px-1.5 py-0.5 shrink-0">
+                    <span className="text-[12px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded px-2 py-0.5 shrink-0">
                       {result.source}
                     </span>
                     <span className="text-[#475569] shrink-0">
@@ -318,7 +318,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
                       onSelectTorrent(torrent.id);
                       onClose();
                     }}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors text-[13px] ${
+                    className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors text-[15px] ${
                       index === selectedIndex ? "bg-[rgba(255,255,255,0.03)]" : ""
                     }`}
                   >
@@ -328,7 +328,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
                     <span className="text-[#475569] shrink-0">
                       {formatBytes(torrent.bytes)}
                     </span>
-                    <span className="text-[10px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded px-1.5 py-0.5 shrink-0">
+                    <span className="text-[12px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded px-2 py-0.5 shrink-0">
                       {torrent.status}
                     </span>
                   </div>
@@ -338,7 +338,7 @@ export default function CommandPalette({ onClose, onSelectTorrent }: CommandPale
 
           {/* Tracker warnings */}
           {warningTrackers.length > 0 && (
-            <div className="px-4 py-2 text-[11px] text-[#eab308]">
+            <div className="px-5 py-3 text-[13px] text-[#eab308]">
               {warningTrackers.map((t) => (
                 <div key={t.name}>
                   ⚠ {t.name}: {t.error ?? "unavailable"}

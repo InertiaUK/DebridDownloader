@@ -1,8 +1,9 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import IconRail from "./IconRail";
+import Sidebar from "./Sidebar";
 import CommandPalette from "./CommandPalette";
 import SettingsModal from "./SettingsModal";
+import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
 
 export default function Layout() {
   const [showSearch, setShowSearch] = useState(false);
@@ -13,9 +14,11 @@ export default function Layout() {
 
   const activeView = location.pathname.startsWith("/downloads")
     ? "downloads"
+    : location.pathname.startsWith("/completed")
+    ? "completed"
     : "torrents";
 
-  const handleViewChange = (view: string) => {
+  const handleNavigate = (view: string) => {
     navigate("/" + view);
   };
 
@@ -68,31 +71,31 @@ export default function Layout() {
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showSearch, showSettings]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#08080f]">
-      <IconRail
-        activeView={activeView}
-        onViewChange={handleViewChange}
-        onSearchOpen={() => setShowSearch(true)}
-        onSettingsOpen={() => setShowSettings(true)}
-      />
-      <main className="flex-1 overflow-hidden">
-        <Outlet />
-      </main>
-      {showSearch && (
-        <CommandPalette
-          onClose={() => setShowSearch(false)}
-          onSelectTorrent={handleSelectTorrent}
+    <DownloadTasksProvider>
+      <div className="flex h-screen overflow-hidden bg-[#08080f]">
+        <Sidebar
+          activeView={activeView}
+          onNavigate={handleNavigate}
+          onSearchOpen={() => setShowSearch(true)}
+          onSettingsOpen={() => setShowSettings(true)}
         />
-      )}
-      {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} />
-      )}
-    </div>
+        <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "#0a0a12" }}>
+          <Outlet />
+        </main>
+        {showSearch && (
+          <CommandPalette
+            onClose={() => setShowSearch(false)}
+            onSelectTorrent={handleSelectTorrent}
+          />
+        )}
+        {showSettings && (
+          <SettingsModal onClose={() => setShowSettings(false)} />
+        )}
+      </div>
+    </DownloadTasksProvider>
   );
 }

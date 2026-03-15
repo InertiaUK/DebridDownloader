@@ -60,20 +60,20 @@ export default function AddTorrentModal({ onClose, onAdded }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-xl w-full max-w-lg p-6"
+        className="bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-xl w-full max-w-lg p-8"
         style={{ animation: "slide-up 0.2s ease" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-[14px] font-semibold text-[#f1f5f9] tracking-[-0.2px]">
+          <h3 className="text-[18px] font-semibold text-[#f1f5f9] tracking-[-0.3px]">
             Add Torrent
           </h3>
           <button
             onClick={onClose}
             className="text-[#475569] hover:text-[#f1f5f9] transition-colors p-1"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -81,8 +81,8 @@ export default function AddTorrentModal({ onClose, onAdded }: Props) {
         </div>
 
         {/* Magnet */}
-        <div className="mb-4">
-          <label className="block text-[13px] font-medium text-[#94a3b8] mb-2">
+        <div className="mb-5">
+          <label className="block text-[15px] font-medium text-[#94a3b8] mb-2">
             Magnet Link
           </label>
           <textarea
@@ -90,21 +90,21 @@ export default function AddTorrentModal({ onClose, onAdded }: Props) {
             onChange={(e) => setMagnet(e.target.value)}
             placeholder="magnet:?xt=urn:btih:..."
             rows={3}
-            className="w-full px-3 py-2.5 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-md text-[#f1f5f9] placeholder-[#374151] text-[13px] font-mono focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-all duration-150 resize-none"
+            className="w-full px-4 py-3 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-md text-[#f1f5f9] placeholder-[#374151] text-[15px] font-mono focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-all duration-150 resize-none"
           />
           <button
             onClick={handleAddMagnet}
             disabled={loading || !magnet.trim()}
-            className="mt-3 w-full py-2.5 bg-[#10b981] hover:bg-[#34d399] text-white font-medium rounded-md text-[13px] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 w-full py-3 bg-[#10b981] hover:bg-[#34d399] text-white font-medium rounded-md text-[15px] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "Adding..." : "Add Magnet"}
           </button>
         </div>
 
         {/* Divider */}
-        <div className="flex items-center gap-3 my-5">
+        <div className="flex items-center gap-3 my-6">
           <div className="flex-1 h-px border-[rgba(255,255,255,0.04)] bg-[rgba(255,255,255,0.04)]" />
-          <span className="text-[#374151] text-[11px]">OR</span>
+          <span className="text-[#374151] text-[13px]">OR</span>
           <div className="flex-1 h-px border-[rgba(255,255,255,0.04)] bg-[rgba(255,255,255,0.04)]" />
         </div>
 
@@ -112,12 +112,12 @@ export default function AddTorrentModal({ onClose, onAdded }: Props) {
         <button
           onClick={handleAddFile}
           disabled={loading}
-          className="w-full py-3 bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-md text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[rgba(255,255,255,0.1)] transition-all text-[13px] disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-md text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[rgba(255,255,255,0.1)] transition-all text-[15px] disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <div className="flex flex-col items-center gap-2">
             <svg
-              width="18"
-              height="18"
+              width="22"
+              height="22"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -136,7 +136,7 @@ export default function AddTorrentModal({ onClose, onAdded }: Props) {
 
         {/* Error */}
         {error && (
-          <div className="mt-4 text-[#ef4444] bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.1)] rounded-md text-[13px] p-3">
+          <div className="mt-4 text-[#ef4444] bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.1)] rounded-md text-[15px] p-4">
             {error}
           </div>
         )}

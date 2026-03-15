@@ -1,415 +1,311 @@
-import { useEffect, useRef, useState } from "react";
-import MasterDetail from "../components/MasterDetail";
-import { StatsDashboard } from "../components/StatsDashboard";
-import { useAuth } from "../hooks/useAuth";
-import { useDownloadProgress } from "../hooks/useDownloadProgress";
+import { useEffect, useState, useMemo } from "react";
+import DataTable, { type Column } from "../components/DataTable";
+import TableToolbar from "../components/TableToolbar";
+import SlideOverPanel from "../components/SlideOverPanel";
+import { useDownloadTasks } from "../hooks/useDownloadTasks";
 import * as downloadsApi from "../api/downloads";
-import { getSettings } from "../api/settings";
-import type { DownloadTask, AppSettings } from "../types";
-import {
-  formatBytes,
-  formatSpeed,
-  formatEta,
-  getDownloadStatusText,
-} from "../utils";
-
-function downloadStatusDotColor(status: DownloadTask["status"]): string {
-  if (status === "Downloading" || status === "Pending") return "#3b82f6";
-  if (status === "Completed") return "#10b981";
-  if (status === "Cancelled") return "#ef4444";
-  if (typeof status === "object" && "Failed" in status) return "#ef4444";
-  return "#475569";
-}
+import type { DownloadTask } from "../types";
+import { formatBytes, formatSpeed, formatEta, getDownloadStatusText } from "../utils";
 
 function isActive(status: DownloadTask["status"]): boolean {
   return status === "Downloading" || status === "Pending";
 }
 
-function isCompleted(status: DownloadTask["status"]): boolean {
-  return status === "Completed";
+function statusBadgeClass(status: DownloadTask["status"]): string {
+  if (status === "Downloading" || status === "Pending") return "bg-[rgba(59,130,246,0.12)] text-[#3b82f6]";
+  if (status === "Cancelled") return "bg-[rgba(239,68,68,0.12)] text-[#ef4444]";
+  if (typeof status === "object" && "Failed" in status) return "bg-[rgba(239,68,68,0.12)] text-[#ef4444]";
+  return "bg-[rgba(148,163,184,0.12)] text-[#94a3b8]";
 }
 
 export default function DownloadsPage() {
-  const { user } = useAuth();
-  const [tasks, setTasks] = useState<DownloadTask[]>([]);
+  const { tasks } = useDownloadTasks();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const progress = useDownloadProgress();
+  const [filter, setFilter] = useState("");
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
 
-  const completedCountRef = useRef<number>(0);
-  const seenCompletedRef = useRef<Set<string>>(new Set());
-  // Force re-render when completedCount changes
-  const [, setTick] = useState(0);
+  // Only show non-completed tasks
+  const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "Completed"), [tasks]);
 
-  // Merge live progress data into task list
-  const mergedTasks = tasks.map((task) => {
-    const p = progress.get(task.id);
-    if (p) {
-      return {
-        ...task,
-        downloaded_bytes: p.downloaded_bytes,
-        total_bytes: p.total_bytes,
-        speed: p.speed,
-        status: p.status,
-      };
+  const filtered = useMemo(() => {
+    let result = activeTasks;
+    if (filter) {
+      const q = filter.toLowerCase();
+      result = result.filter((t) => t.filename.toLowerCase().includes(q));
     }
-    return task;
-  });
+    if (sortKey) {
+      result = [...result].sort((a, b) => {
+        let cmp = 0;
+        if (sortKey === "filename") cmp = a.filename.localeCompare(b.filename);
+        else if (sortKey === "total_bytes") cmp = a.total_bytes - b.total_bytes;
+        return sortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+    return result;
+  }, [activeTasks, filter, sortKey, sortDirection]);
 
-  const completedTasks = mergedTasks.filter((t) => isCompleted(t.status));
+  const selectedTask = filtered.find((t) => t.id === selectedId) ?? null;
 
-  // Poll download tasks every 3 seconds
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const data = await downloadsApi.getDownloadTasks();
-        setTasks(data);
-        // Track newly completed tasks
-        for (const task of data) {
-          if (
-            task.status === "Completed" &&
-            !seenCompletedRef.current.has(task.id)
-          ) {
-            seenCompletedRef.current.add(task.id);
-            completedCountRef.current += 1;
-            setTick((t) => t + 1);
-          }
-        }
-      } catch {
-        // ignore
-      }
-    };
-    poll();
-    const interval = setInterval(poll, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch settings on mount
-  useEffect(() => {
-    getSettings().then(setSettings).catch(() => {});
-  }, []);
-
-  // Listen for refresh-list event
-  useEffect(() => {
-    const handler = async () => {
-      try {
-        const data = await downloadsApi.getDownloadTasks();
-        setTasks(data);
-      } catch {
-        // ignore
-      }
-    };
-    window.addEventListener("refresh-list", handler);
-    return () => window.removeEventListener("refresh-list", handler);
-  }, []);
-
-  // Listen for deselect-item event
+  // Window event listeners
   useEffect(() => {
     const handler = () => setSelectedId(null);
     window.addEventListener("deselect-item", handler);
     return () => window.removeEventListener("deselect-item", handler);
   }, []);
 
-  // Listen for delete-selected — cancel the selected download
   useEffect(() => {
     const handler = () => {
-      if (selectedId) {
-        downloadsApi.cancelDownload(selectedId).catch(() => {});
-      }
+      if (selectedId) downloadsApi.cancelDownload(selectedId).catch(() => {});
     };
     window.addEventListener("delete-selected", handler);
     return () => window.removeEventListener("delete-selected", handler);
   }, [selectedId]);
 
+  // Close context menu
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null); };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [contextMenu]);
+
   const handleCancel = async (id: string) => {
-    try {
-      await downloadsApi.cancelDownload(id);
-    } catch {
-      // ignore
-    }
+    try { await downloadsApi.cancelDownload(id); } catch { /* ignore */ }
   };
 
-  const handleClearCompleted = async () => {
-    try {
-      await downloadsApi.clearCompletedDownloads();
-      const data = await downloadsApi.getDownloadTasks();
-      setTasks(data);
-      if (selectedId) {
-        const stillExists = data.find((t) => t.id === selectedId);
-        if (!stillExists) setSelectedId(null);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  // ── List Panel ──────────────────────────────────────────────────────────────
-
-  const listPanel = (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex justify-between items-center px-4 py-3 border-b border-[rgba(255,255,255,0.04)]">
-        <span style={{ fontSize: "14px", fontWeight: 600 }} className="text-[#f1f5f9]">
-          Downloads
+  const columns: Column<DownloadTask>[] = [
+    {
+      key: "filename",
+      header: "Name",
+      width: "1fr",
+      sortable: true,
+      render: (t) => {
+        const active = isActive(t.status);
+        const pct = t.total_bytes > 0 ? (t.downloaded_bytes / t.total_bytes) * 100 : 0;
+        return (
+          <div>
+            <div className="text-[15px] font-medium text-[#f1f5f9] truncate">{t.filename}</div>
+            {active && pct > 0 && (
+              <div className="mt-1.5 h-[3px] rounded-full bg-[rgba(59,130,246,0.08)]">
+                <div className="h-full bg-[#3b82f6] rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "total_bytes",
+      header: "Size",
+      width: "100px",
+      sortable: true,
+      render: (t) => <span className="text-[14px] text-[#94a3b8]">{formatBytes(t.total_bytes)}</span>,
+    },
+    {
+      key: "speed",
+      header: "Speed",
+      width: "100px",
+      render: (t) => (
+        <span className="text-[13px] text-[#64748b]">
+          {isActive(t.status) && t.speed > 0 ? formatSpeed(t.speed) : "--"}
         </span>
-        {completedTasks.length > 0 && (
-          <button
-            onClick={handleClearCompleted}
-            className="text-[#475569] hover:text-[#94a3b8] text-[12px] transition-colors"
-          >
-            Clear Completed
-          </button>
-        )}
-      </div>
-
-      {/* List */}
-      <div className="flex-1 overflow-y-auto">
-        {mergedTasks.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <p className="text-[#475569] text-[13px]">No downloads</p>
-          </div>
-        ) : (
-          mergedTasks.map((task) => {
-            const isSelected = selectedId === task.id;
-            const dotColor = downloadStatusDotColor(task.status);
-            const active = isActive(task.status);
-            const pct =
-              task.total_bytes > 0
-                ? (task.downloaded_bytes / task.total_bytes) * 100
-                : 0;
-
-            const rightLabel = active
-              ? `${pct.toFixed(1)}%`
-              : `${formatBytes(task.total_bytes)} · ${getDownloadStatusText(task.status)}`;
-
-            return (
-              <div
-                key={task.id}
-                className={`flex items-center gap-3 px-4 cursor-pointer transition-colors duration-150 ${
-                  isSelected
-                    ? "border-l-2 border-[#10b981] bg-[rgba(16,185,129,0.04)]"
-                    : "border-l-2 border-transparent hover:bg-[rgba(255,255,255,0.03)]"
-                }`}
-                style={{ minHeight: "44px" }}
-                onClick={() => setSelectedId(task.id)}
-              >
-                {/* Status dot */}
-                <div
-                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: dotColor }}
-                />
-
-                {/* Filename + optional progress bar */}
-                <div className="flex-1 min-w-0 py-2">
-                  <div className="text-[13px] font-medium text-[#f1f5f9] truncate">
-                    {task.filename}
-                  </div>
-                  {active && pct > 0 && (
-                    <div className="mt-1 h-0.5 rounded-full bg-[rgba(59,130,246,0.08)]">
-                      <div
-                        className="h-0.5 bg-[#3b82f6] rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Right side */}
-                <div className="shrink-0 text-[11px] text-[#475569] text-right max-w-[80px] truncate">
-                  {rightLabel}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Detail Panel ─────────────────────────────────────────────────────────────
-
-  const selectedTask = mergedTasks.find((t) => t.id === selectedId) ?? null;
-
-  let detailPanel: React.ReactNode;
-
-  if (!selectedTask) {
-    detailPanel = (
-      <StatsDashboard
-        user={user}
-        downloadTasks={mergedTasks}
-        settings={settings}
-        completedCount={completedCountRef.current}
-      />
-    );
-  } else {
-    const task = selectedTask;
-    const active = isActive(task.status);
-    const completed = isCompleted(task.status);
-    const pct =
-      task.total_bytes > 0
-        ? (task.downloaded_bytes / task.total_bytes) * 100
-        : 0;
-
-    detailPanel = (
-      <div className="p-6">
-        {/* Filename */}
-        <p
-          className="text-[#f1f5f9] mb-4 break-all"
-          style={{ fontSize: "14px", fontWeight: 600, letterSpacing: "-0.2px" }}
-        >
-          {task.filename}
-        </p>
-
-        {active && (
-          <>
-            {/* Percentage */}
-            <div
-              className="text-[#3b82f6] mb-2"
-              style={{ fontSize: "24px", fontWeight: 600 }}
-            >
-              {pct.toFixed(1)}%
-            </div>
-
-            {/* 3px progress bar */}
-            <div
-              className="rounded-full mb-4"
-              style={{
-                height: "3px",
-                backgroundColor: "rgba(59,130,246,0.08)",
-              }}
-            >
-              <div
-                className="rounded-full transition-all duration-300"
-                style={{
-                  height: "3px",
-                  width: `${Math.min(pct, 100)}%`,
-                  backgroundColor: "#3b82f6",
-                }}
-              />
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  Speed
-                </div>
-                <div className="text-[13px] text-[#f1f5f9] font-medium">
-                  {task.speed > 0 ? formatSpeed(task.speed) : "--"}
-                </div>
-              </div>
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  ETA
-                </div>
-                <div className="text-[13px] text-[#f1f5f9] font-medium">
-                  {formatEta(task.total_bytes, task.downloaded_bytes, task.speed)}
-                </div>
-              </div>
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  Downloaded
-                </div>
-                <div className="text-[13px] text-[#f1f5f9] font-medium">
-                  {formatBytes(task.downloaded_bytes)}{" "}
-                  <span className="text-[#475569]">of</span>{" "}
-                  {formatBytes(task.total_bytes)}
-                </div>
-              </div>
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  Destination
-                </div>
-                <div
-                  className="text-[13px] text-[#f1f5f9] font-medium truncate"
-                  title={task.destination}
-                >
-                  {task.destination || "--"}
-                </div>
-              </div>
-            </div>
-
-            {/* Cancel button */}
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "100px",
+      render: (t) => {
+        if (isActive(t.status) && t.total_bytes > 0) {
+          const pct = ((t.downloaded_bytes / t.total_bytes) * 100).toFixed(1);
+          return <span className="text-[13px] text-[#3b82f6] font-medium">{pct}%</span>;
+        }
+        return (
+          <span className={`text-[12px] px-2.5 py-1 rounded-md font-medium ${statusBadgeClass(t.status)}`}>
+            {getDownloadStatusText(t.status)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "",
+      width: "70px",
+      render: (t) => (
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          {isActive(t.status) ? (
             <button
-              onClick={() => handleCancel(task.id)}
-              className="text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] rounded-md px-4 py-2 text-[13px] transition-colors"
+              onClick={() => handleCancel(t.id)}
+              className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[#ef4444]"
+              style={{ background: "rgba(239,68,68,0.08)" }}
+              title="Cancel"
             >
-              Cancel Download
+              ×
             </button>
-          </>
-        )}
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setContextMenu({ x: e.clientX, y: e.clientY, taskId: t.id });
+              }}
+              className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[#64748b]"
+              style={{ background: "rgba(255,255,255,0.04)" }}
+            >
+              ···
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
-        {completed && (
-          <div className="flex flex-col gap-3">
-            {/* Checkmark + label */}
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-[rgba(16,185,129,0.12)] flex items-center justify-center shrink-0">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+  return (
+    <>
+      <TableToolbar
+        title="Downloads"
+        subtitle={`${activeTasks.length} active`}
+        filterPlaceholder="Filter downloads..."
+        filterValue={filter}
+        onFilterChange={setFilter}
+      />
+
+      <DataTable
+        columns={columns}
+        data={filtered}
+        rowKey={(t) => t.id}
+        onRowClick={(t) => setSelectedId(t.id)}
+        onRowContextMenu={(t, e) => setContextMenu({ x: e.clientX, y: e.clientY, taskId: t.id })}
+        selectedId={selectedId}
+        sortKey={sortKey}
+        sortDirection={sortDirection}
+        onSort={(key, dir) => { setSortKey(key); setSortDirection(dir); }}
+        emptyMessage="No active downloads"
+        emptySubtext="Download torrents from the Torrents page"
+      />
+
+      {/* Slide-over */}
+      <SlideOverPanel open={!!selectedTask} onClose={() => setSelectedId(null)}>
+        {selectedTask && (() => {
+          const task = selectedTask;
+          const active = isActive(task.status);
+          const pct = task.total_bytes > 0 ? (task.downloaded_bytes / task.total_bytes) * 100 : 0;
+          const isFailed = typeof task.status === "object" && "Failed" in task.status;
+          const isCancelled = task.status === "Cancelled";
+
+          return (
+            <>
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.06)] flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[18px] font-bold text-[#f1f5f9] leading-snug break-words">
+                    {task.filename}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-[#f1f5f9] shrink-0"
+                  style={{ background: "rgba(255,255,255,0.04)" }}
                 >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                  ×
+                </button>
               </div>
-              <span className="text-[13px] text-[#10b981] font-medium">
-                Download complete
-              </span>
-            </div>
 
-            {/* Destination */}
-            {task.destination && (
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  Saved to
-                </div>
-                <div
-                  className="text-[13px] text-[#f1f5f9] font-medium break-all"
-                >
-                  {task.destination}
-                </div>
-              </div>
-            )}
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                {active && (
+                  <>
+                    <div className="text-[28px] font-semibold text-[#3b82f6] mb-3">
+                      {pct.toFixed(1)}%
+                    </div>
+                    <div className="h-1 rounded-full bg-[rgba(59,130,246,0.08)] mb-5">
+                      <div className="h-full rounded-full bg-[#3b82f6] transition-all duration-300" style={{ width: `${Math.min(pct, 100)}%` }} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Speed</div>
+                        <div className="text-[15px] text-[#f1f5f9] font-medium">{task.speed > 0 ? formatSpeed(task.speed) : "--"}</div>
+                      </div>
+                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">ETA</div>
+                        <div className="text-[15px] text-[#f1f5f9] font-medium">{formatEta(task.total_bytes, task.downloaded_bytes, task.speed)}</div>
+                      </div>
+                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Downloaded</div>
+                        <div className="text-[15px] text-[#f1f5f9] font-medium">{formatBytes(task.downloaded_bytes)} <span className="text-[#475569]">of</span> {formatBytes(task.total_bytes)}</div>
+                      </div>
+                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Destination</div>
+                        <div className="text-[14px] text-[#f1f5f9] font-medium truncate">{task.destination || "--"}</div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
-            {/* Size */}
-            {task.total_bytes > 0 && (
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  Size
-                </div>
-                <div className="text-[13px] text-[#f1f5f9] font-medium">
-                  {formatBytes(task.total_bytes)}
-                </div>
+                {(isFailed || isCancelled) && (
+                  <div className="flex flex-col gap-3">
+                    <p className="text-[#ef4444] text-[15px]">{getDownloadStatusText(task.status)}</p>
+                    {task.destination && (
+                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Destination</div>
+                        <div className="text-[15px] text-[#f1f5f9] font-medium break-all">{task.destination}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-[rgba(255,255,255,0.06)] flex gap-2.5">
+                {active && (
+                  <button
+                    onClick={() => handleCancel(task.id)}
+                    className="py-3 px-5 rounded-[10px] text-[#ef4444] text-[14px] transition-colors"
+                    style={{ background: "rgba(239,68,68,0.06)" }}
+                  >
+                    Cancel Download
+                  </button>
+                )}
+              </div>
+            </>
+          );
+        })()}
+      </SlideOverPanel>
+
+      {/* Context menu */}
+      {contextMenu && (() => {
+        const menuTask = filtered.find((t) => t.id === contextMenu.taskId);
+        const menuActive = menuTask ? isActive(menuTask.status) : false;
+        return (
+          <div
+            className="fixed bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {menuActive ? (
+              <button
+                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                onClick={() => { setContextMenu(null); handleCancel(contextMenu.taskId); }}
+              >
+                Cancel
+              </button>
+            ) : (
+              <button
+                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                onClick={() => { setContextMenu(null); /* hide from list client-side */ }}
+              >
+                Remove
+              </button>
             )}
           </div>
-        )}
-
-        {!active && !completed && (
-          <div className="flex flex-col gap-2">
-            <p className="text-[#ef4444] text-[13px]">
-              {getDownloadStatusText(task.status)}
-            </p>
-            {task.destination && (
-              <div className="bg-[#0f0f18] border border-[rgba(255,255,255,0.04)] rounded-lg p-3">
-                <div className="text-[11px] text-[#475569] uppercase tracking-wider mb-1">
-                  Destination
-                </div>
-                <div className="text-[13px] text-[#f1f5f9] font-medium break-all">
-                  {task.destination}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return <MasterDetail listPanel={listPanel} detailPanel={detailPanel} />;
+        );
+      })()}
+    </>
+  );
 }
