@@ -33,6 +33,9 @@ jobs:
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             name: Linux-x64
+          - platform: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            name: Linux-arm64
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -59,7 +62,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
 
       - name: Install frontend dependencies
         run: npm ci
@@ -102,7 +105,8 @@ jobs:
             | macOS | Intel | `.dmg` (x64) |
             | Windows | x64 | `.exe` installer |
             | Windows | ARM64 | `.exe` installer |
-            | Linux | x64 | `.deb` / `.AppImage` |
+            | Linux | x64 | `.deb` / `.rpm` / `.AppImage` |
+            | Linux | ARM64 | `.deb` / `.rpm` / `.AppImage` |
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
@@ -120,6 +124,8 @@ jobs:
             target: x86_64-pc-windows-msvc
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+          - platform: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -145,7 +151,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
 
       - name: Install frontend dependencies
         run: npm ci
