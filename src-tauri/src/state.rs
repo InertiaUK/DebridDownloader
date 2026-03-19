@@ -2,6 +2,7 @@ use crate::api::client::RdClient;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,11 +46,18 @@ pub enum DownloadStatus {
     Cancelled,
 }
 
+pub struct StreamSession {
+    pub url: String,
+    pub created_at: Instant,
+}
+
 pub struct AppState {
     pub client: RdClient,
     pub settings: Arc<RwLock<AppSettings>>,
     pub active_downloads: Arc<RwLock<HashMap<String, DownloadTask>>>,
     pub cancel_tokens: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
+    pub streaming_port: Arc<RwLock<Option<u16>>>,
+    pub stream_sessions: Arc<RwLock<HashMap<String, StreamSession>>>,
 }
 
 impl AppState {
@@ -59,6 +67,8 @@ impl AppState {
             settings: Arc::new(RwLock::new(AppSettings::default())),
             active_downloads: Arc::new(RwLock::new(HashMap::new())),
             cancel_tokens: Arc::new(RwLock::new(HashMap::new())),
+            streaming_port: Arc::new(RwLock::new(None)),
+            stream_sessions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
