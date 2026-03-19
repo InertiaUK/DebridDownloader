@@ -4,9 +4,12 @@ import DataTable, { type Column } from "../components/DataTable";
 import TableToolbar from "../components/TableToolbar";
 import SlideOverPanel from "../components/SlideOverPanel";
 import AddTorrentModal from "../components/AddTorrentModal";
+import VideoPlayer from "../components/VideoPlayer";
 import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
+import { getStreamUrl, cleanupStreamSession } from "../api/streaming";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
 import {
   formatBytes,
@@ -52,6 +55,75 @@ export default function TorrentsPage() {
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  // Streaming state
+  const [streamingFileId, setStreamingFileId] = useState<number | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamSessionId, setStreamSessionId] = useState<string | null>(null);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+
+  const INLINE_VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v"];
+  const EXTERNAL_VIDEO_EXTS = [".mkv", ".avi", ".wmv", ".flv", ".ts"];
+
+  const getFileExt = (path: string) => {
+    const dot = path.lastIndexOf(".");
+    return dot >= 0 ? path.slice(dot).toLowerCase() : "";
+  };
+
+  const isInlineVideo = (path: string) => INLINE_VIDEO_EXTS.includes(getFileExt(path));
+  const isExternalVideo = (path: string) => EXTERNAL_VIDEO_EXTS.includes(getFileExt(path));
+
+  const handlePlayInline = async (fileId: number) => {
+    if (!detailInfo) return;
+
+    // Toggle off if clicking the same file
+    if (streamingFileId === fileId) {
+      await handleStopStream();
+      return;
+    }
+
+    // Cleanup previous session
+    if (streamSessionId) {
+      await cleanupStreamSession(streamSessionId).catch(() => {});
+    }
+
+    setStreamLoading(true);
+    setStreamError(null);
+    setStreamingFileId(fileId);
+
+    try {
+      const result = await getStreamUrl(detailInfo.id, fileId);
+      setStreamUrl(result.stream_url);
+      setStreamSessionId(result.session_id);
+    } catch (e) {
+      setStreamError(e instanceof Error ? e.message : String(e));
+      setStreamingFileId(null);
+    } finally {
+      setStreamLoading(false);
+    }
+  };
+
+  const handlePlayExternal = async (fileId: number) => {
+    if (!detailInfo) return;
+    try {
+      const result = await getStreamUrl(detailInfo.id, fileId);
+      await openUrl(result.stream_url);
+      setTimeout(() => cleanupStreamSession(result.session_id).catch(() => {}), 5000);
+    } catch (e) {
+      setStreamError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleStopStream = async () => {
+    if (streamSessionId) {
+      await cleanupStreamSession(streamSessionId).catch(() => {});
+    }
+    setStreamingFileId(null);
+    setStreamUrl(null);
+    setStreamSessionId(null);
+    setStreamError(null);
+  };
 
   const fetchTorrents = useCallback(async () => {
     try {
@@ -329,7 +401,11 @@ export default function TorrentsPage() {
       />
 
       {/* Slide-over detail */}
-      <SlideOverPanel open={!!selectedId} onClose={() => setSelectedId(null)}>
+      <SlideOverPanel
+        open={!!selectedId}
+        onClose={() => { handleStopStream(); setSelectedId(null); }}
+        width={streamingFileId !== null ? 640 : 420}
+      >
         {detailLoading ? (
           <div className="flex items-center justify-center flex-1">
             <div className="w-6 h-6 border-2 border-[rgba(16,185,129,0.3)] border-t-[#10b981] rounded-full animate-spin" />
@@ -379,6 +455,35 @@ export default function TorrentsPage() {
                 </div>
               </div>
 
+              {/* Video Player */}
+              {streamingFileId !== null && streamUrl && (
+                <VideoPlayer
+                  streamUrl={streamUrl}
+                  filename={
+                    detailInfo.files.find((f) => f.id === streamingFileId)?.path.split("/").pop() || "Video"
+                  }
+                  onClose={handleStopStream}
+                  onExternalPlayer={() => {
+                    const fid = streamingFileId;
+                    handleStopStream();
+                    if (fid !== null) handlePlayExternal(fid);
+                  }}
+                />
+              )}
+
+              {streamError && !streamUrl && (
+                <div className="mt-5 rounded-[10px] bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.15)] p-4 flex items-center justify-between">
+                  <p className="text-[13px] text-[#ef4444]">{streamError}</p>
+                  <button
+                    onClick={() => streamingFileId !== null && handlePlayInline(streamingFileId)}
+                    className="text-[12px] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] px-3 py-1.5 rounded-md"
+                    style={{ background: "var(--theme-hover)" }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
               {/* Files */}
               {detailInfo.files.length > 0 && (
                 <div>
@@ -387,30 +492,67 @@ export default function TorrentsPage() {
                   </div>
                   <div className="rounded-[10px] border border-[var(--theme-border-subtle)] overflow-hidden max-h-64 overflow-y-auto">
                     {detailInfo.files.map((file) => (
-                      <label
+                      <div
                         key={file.id}
-                        className="flex items-center gap-2.5 px-3.5 py-3 cursor-pointer border-b border-[var(--theme-border-subtle)] last:border-b-0 hover:bg-[var(--theme-hover)] transition-colors"
+                        className={`flex items-center gap-2.5 px-3.5 py-3 border-b border-[var(--theme-border-subtle)] last:border-b-0 transition-colors ${
+                          streamingFileId === file.id
+                            ? "bg-[rgba(16,185,129,0.06)] border-l-2 border-l-[var(--accent)]"
+                            : "hover:bg-[var(--theme-hover)]"
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedFiles.has(file.id)}
-                          onChange={() => {
-                            setSelectedFiles((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(file.id)) next.delete(file.id);
-                              else next.add(file.id);
-                              return next;
-                            });
-                          }}
-                          className="accent-[#10b981]"
-                        />
+                        {detailInfo.status === "waiting_files_selection" && (
+                          <input
+                            type="checkbox"
+                            checked={selectedFiles.has(file.id)}
+                            onChange={() => {
+                              setSelectedFiles((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(file.id)) next.delete(file.id);
+                                else next.add(file.id);
+                                return next;
+                              });
+                            }}
+                            className="accent-[#10b981]"
+                          />
+                        )}
+
+                        {detailInfo.status === "downloaded" && isInlineVideo(file.path) && (
+                          <button
+                            onClick={() => handlePlayInline(file.id)}
+                            disabled={streamLoading && streamingFileId === file.id}
+                            className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                              streamingFileId === file.id
+                                ? "bg-[var(--accent)] text-white"
+                                : "bg-[rgba(16,185,129,0.1)] text-[#10b981] hover:bg-[rgba(16,185,129,0.2)]"
+                            }`}
+                          >
+                            {streamLoading && streamingFileId === file.id ? (
+                              <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                            ) : streamingFileId === file.id ? (
+                              <span className="text-[11px]">■</span>
+                            ) : (
+                              <span className="text-[11px]">▶</span>
+                            )}
+                          </button>
+                        )}
+
+                        {detailInfo.status === "downloaded" && isExternalVideo(file.path) && (
+                          <button
+                            onClick={() => handlePlayExternal(file.id)}
+                            className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-[var(--theme-hover)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+                            title="Open in external player"
+                          >
+                            <span className="text-[11px]">▶↗</span>
+                          </button>
+                        )}
+
                         <span className="flex-1 text-[14px] text-[var(--theme-text-primary)] truncate min-w-0">
                           {file.path.startsWith("/") ? file.path.slice(1) : file.path}
                         </span>
                         <span className="text-[12px] text-[var(--theme-text-muted)] shrink-0">
                           {formatBytes(file.bytes)}
                         </span>
-                      </label>
+                      </div>
                     ))}
                   </div>
                 </div>
