@@ -1,3 +1,4 @@
+pub mod real_debrid;
 pub mod types;
 
 use async_trait::async_trait;
