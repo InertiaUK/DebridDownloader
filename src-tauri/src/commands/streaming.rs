@@ -9,49 +9,30 @@ pub async fn get_stream_url(
     torrent_id: String,
     file_id: u64,
 ) -> Result<serde_json::Value, String> {
-    // Check streaming server is running
     let port = state
         .streaming_port
         .read()
         .await
         .ok_or("Streaming server not running")?;
 
-    // Fetch torrent info
-    let info = state
-        .client
+    // Verify torrent is ready for streaming
+    let provider = state.get_provider().await;
+    let info = provider
         .torrent_info(&torrent_id)
         .await
         .map_err(|e| format!("Failed to fetch torrent info: {}", e))?;
-
-    // Precondition: torrent must be downloaded
     if info.status != "downloaded" {
         return Err("Torrent is not ready for streaming.".to_string());
     }
 
-    // Map file_id to link index:
-    // RD's links array corresponds 1:1 with selected files in order
-    let selected_files: Vec<_> = info.files.iter().filter(|f| f.selected == 1).collect();
-    let link_index = selected_files
-        .iter()
-        .position(|f| f.id == file_id)
-        .ok_or("File not available for streaming")?;
-
-    let link = info
-        .links
-        .get(link_index)
-        .ok_or("No link available for this file")?;
-
-    // Unrestrict the link
-    let unrestricted = state
-        .client
-        .unrestrict_link(link)
+    let link = provider
+        .get_download_link_for_file(&torrent_id, file_id)
         .await
-        .map_err(|e| format!("Failed to unrestrict link: {}", e))?;
+        .map_err(|e| format!("Failed to get download link: {}", e))?;
 
-    // Create session
     let session_id = Uuid::new_v4().to_string();
     let session = StreamSession {
-        url: unrestricted.download,
+        url: link.download,
         created_at: Instant::now(),
     };
 

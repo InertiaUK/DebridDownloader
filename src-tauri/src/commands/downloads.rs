@@ -1,45 +1,20 @@
-use crate::api::types::{DownloadItem, UnrestrictedLink};
+use crate::providers::types::{DownloadItem, DownloadLink};
 use crate::downloader;
 use crate::state::{AppState, DownloadStatus, DownloadTask};
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
-#[tauri::command]
-pub async fn unrestrict_link(
-    state: State<'_, AppState>,
-    link: String,
-) -> Result<UnrestrictedLink, String> {
-    state
-        .client
-        .unrestrict_link(&link)
-        .await
-        .map_err(|e| format!("{}", e))
-}
-
-/// Unrestrict all links from a torrent and return direct download URLs
+/// Get download links for a torrent (replaces unrestrict_torrent_links)
 #[tauri::command]
 pub async fn unrestrict_torrent_links(
     state: State<'_, AppState>,
     torrent_id: String,
-) -> Result<Vec<UnrestrictedLink>, String> {
-    let info = state
-        .client
-        .torrent_info(&torrent_id)
+) -> Result<Vec<DownloadLink>, String> {
+    let provider = state.get_provider().await;
+    provider
+        .get_download_links(&torrent_id)
         .await
-        .map_err(|e| format!("{}", e))?;
-
-    let mut results = Vec::new();
-    for link in &info.links {
-        match state.client.unrestrict_link(link).await {
-            Ok(unrestricted) => results.push(unrestricted),
-            Err(e) => {
-                log::warn!("Failed to unrestrict link {}: {}", link, e);
-                // Continue with other links
-            }
-        }
-    }
-
-    Ok(results)
+        .map_err(|e| format!("{}", e))
 }
 
 /// Start downloading files to a folder
@@ -47,7 +22,7 @@ pub async fn unrestrict_torrent_links(
 pub async fn start_downloads(
     app: AppHandle,
     state: State<'_, AppState>,
-    links: Vec<UnrestrictedLink>,
+    links: Vec<DownloadLink>,
     destination_folder: String,
     torrent_name: Option<String>,
 ) -> Result<Vec<String>, String> {
@@ -91,8 +66,6 @@ pub async fn start_downloads(
 
     let ids: Vec<String> = task_ids.iter().map(|(id, _)| id.clone()).collect();
 
-    // Spawn download workers
-    let client = state.client.clone();
     let active_downloads = state.active_downloads.clone();
     let cancel_tokens_map = state.cancel_tokens.clone();
 
@@ -102,7 +75,6 @@ pub async fn start_downloads(
 
         for (id, mut cancel_rx) in task_ids {
             let sem = semaphore.clone();
-            let client = client.clone();
             let app = app.clone();
             let downloads = active_downloads.clone();
             let cancel_map = cancel_tokens_map.clone();
@@ -110,7 +82,6 @@ pub async fn start_downloads(
             let handle = tokio::spawn(async move {
                 let _permit = sem.acquire().await.unwrap();
 
-                // Get task data
                 let mut task = {
                     let dl = downloads.read().await;
                     match dl.get(&id) {
@@ -119,11 +90,9 @@ pub async fn start_downloads(
                     }
                 };
 
-                // Run download
                 let result =
-                    downloader::download_file(app, &client, &mut task, &mut cancel_rx).await;
+                    downloader::download_file(app, &mut task, &mut cancel_rx).await;
 
-                // Update final state
                 if let Err(e) = result {
                     task.status = DownloadStatus::Failed(e);
                 }
@@ -135,7 +104,6 @@ pub async fn start_downloads(
             handles.push(handle);
         }
 
-        // Wait for all downloads
         for handle in handles {
             let _ = handle.await;
         }
@@ -144,7 +112,6 @@ pub async fn start_downloads(
     Ok(ids)
 }
 
-/// Cancel a specific download
 #[tauri::command]
 pub async fn cancel_download(
     state: State<'_, AppState>,
@@ -156,12 +123,10 @@ pub async fn cancel_download(
     Ok(())
 }
 
-/// Cancel all active downloads and clear everything
 #[tauri::command]
 pub async fn cancel_all_downloads(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    // Cancel all active downloads
     let tokens = state.cancel_tokens.read().await;
     for tx in tokens.values() {
         let _ = tx.send(true);
@@ -172,7 +137,6 @@ pub async fn cancel_all_downloads(
     Ok(())
 }
 
-/// Get all active/recent download tasks
 #[tauri::command]
 pub async fn get_download_tasks(
     state: State<'_, AppState>,
@@ -181,13 +145,11 @@ pub async fn get_download_tasks(
     Ok(downloads.values().cloned().collect())
 }
 
-/// Remove a single download from the list
 #[tauri::command]
 pub async fn remove_download(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
-    // Cancel if still active
     if let Some(tx) = state.cancel_tokens.read().await.get(&id) {
         let _ = tx.send(true);
     }
@@ -196,7 +158,6 @@ pub async fn remove_download(
     Ok(())
 }
 
-/// Clear completed/failed/cancelled downloads from the list
 #[tauri::command]
 pub async fn clear_completed_downloads(
     state: State<'_, AppState>,
@@ -211,16 +172,15 @@ pub async fn clear_completed_downloads(
     Ok(())
 }
 
-/// Get download history from Real-Debrid
 #[tauri::command]
 pub async fn get_download_history(
     state: State<'_, AppState>,
     page: Option<u32>,
     limit: Option<u32>,
 ) -> Result<Vec<DownloadItem>, String> {
-    state
-        .client
-        .list_downloads(page, limit)
+    let provider = state.get_provider().await;
+    provider
+        .download_history(page.unwrap_or(1), limit.unwrap_or(100))
         .await
         .map_err(|e| format!("{}", e))
 }

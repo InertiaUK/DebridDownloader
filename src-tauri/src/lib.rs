@@ -102,7 +102,6 @@ pub fn run() {
             commands::torrents::select_torrent_files,
             commands::torrents::delete_torrent,
             // Downloads
-            commands::downloads::unrestrict_link,
             commands::downloads::unrestrict_torrent_links,
             commands::downloads::start_downloads,
             commands::downloads::cancel_download,

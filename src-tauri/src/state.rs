@@ -59,9 +59,6 @@ pub struct StreamSession {
 }
 
 pub struct AppState {
-    /// Legacy field — kept temporarily so existing commands compile during migration.
-    /// Remove after Task 5 migrates all commands to use `provider`.
-    pub client: crate::api::client::RdClient,
     pub provider: Arc<RwLock<Arc<dyn DebridProvider>>>,
     pub provider_id: Arc<RwLock<String>>,
     pub settings: Arc<RwLock<AppSettings>>,
@@ -76,7 +73,6 @@ impl AppState {
         use crate::providers::real_debrid::client::RdClient;
         let provider: Arc<dyn DebridProvider> = Arc::new(RdClient::new());
         Self {
-            client: crate::api::client::RdClient::new(),
             provider: Arc::new(RwLock::new(provider)),
             provider_id: Arc::new(RwLock::new("real-debrid".to_string())),
             settings: Arc::new(RwLock::new(AppSettings::default())),

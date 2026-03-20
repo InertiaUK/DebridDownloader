@@ -1,4 +1,3 @@
-use crate::api::client::RdClient;
 use crate::state::{DownloadStatus, DownloadTask};
 use futures::StreamExt;
 use serde::Serialize;
@@ -18,23 +17,28 @@ pub struct DownloadProgress {
 
 pub async fn download_file(
     app: AppHandle,
-    client: &RdClient,
     task: &mut DownloadTask,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<(), String> {
     let dest_path = PathBuf::from(&task.destination);
 
-    // Create parent directories
     if let Some(parent) = dest_path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
+    // Download from the direct URL — no provider auth needed
+    let client = reqwest::Client::new();
     let resp = client
-        .download_stream(&task.url)
+        .get(&task.url)
+        .send()
         .await
         .map_err(|e| format!("Failed to start download: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Download failed with status {}", resp.status()));
+    }
 
     let total = resp.content_length().unwrap_or(task.total_bytes as u64) as i64;
     task.total_bytes = total;
@@ -63,7 +67,6 @@ pub async fn download_file(
                         speed_bytes += bytes.len() as i64;
                         task.downloaded_bytes = downloaded;
 
-                        // Calculate speed every second
                         let elapsed = speed_start.elapsed().as_secs_f64();
                         if elapsed >= 1.0 {
                             task.speed = speed_bytes as f64 / elapsed;
@@ -71,7 +74,6 @@ pub async fn download_file(
                             speed_start = std::time::Instant::now();
                         }
 
-                        // Emit progress at most every 100ms
                         if last_emit.elapsed().as_millis() >= 100 {
                             emit_progress(&app, task);
                             last_emit = std::time::Instant::now();
@@ -82,17 +84,13 @@ pub async fn download_file(
                         emit_progress(&app, task);
                         return Err(format!("Download stream error: {}", e));
                     }
-                    None => {
-                        // Stream complete
-                        break;
-                    }
+                    None => break,
                 }
             }
             _ = cancel_rx.changed() => {
                 if *cancel_rx.borrow() {
                     task.status = DownloadStatus::Cancelled;
                     emit_progress(&app, task);
-                    // Clean up partial file
                     let _ = tokio::fs::remove_file(&dest_path).await;
                     return Ok(());
                 }

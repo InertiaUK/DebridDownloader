@@ -1,37 +1,50 @@
-use crate::api::types::{DeviceCode, DeviceCredentials, OAuthToken, User};
+use crate::providers::real_debrid::client::RdClient;
+use crate::providers::types::{
+    DeviceCode, DeviceCredentials, OAuthToken, ProviderAuth, User,
+};
 use crate::state::AppState;
 use keyring::Entry;
+use std::sync::Arc;
 use tauri::State;
 
 const KEYRING_SERVICE: &str = "com.jonathan.debriddownloader";
-const KEYRING_TOKEN_KEY: &str = "api_token";
-const KEYRING_REFRESH_KEY: &str = "refresh_token";
-const KEYRING_CLIENT_ID_KEY: &str = "oauth_client_id";
-const KEYRING_CLIENT_SECRET_KEY: &str = "oauth_client_secret";
 
 fn get_entry(key: &str) -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, key).map_err(|e| format!("Keyring error: {}", e))
 }
 
-/// Save API token to keyring and set it on the client
+fn prefixed_key(provider_id: &str, key: &str) -> String {
+    format!("{}.{}", provider_id, key)
+}
+
+/// Save API token and set on provider (validate first, then persist)
 #[tauri::command]
 pub async fn set_api_token(state: State<'_, AppState>, token: String) -> Result<(), String> {
-    // Save to keyring
-    let entry = get_entry(KEYRING_TOKEN_KEY)?;
-    entry.set_password(&token).map_err(|e| format!("Failed to save token: {}", e))?;
+    let provider = state.get_provider().await;
+    // Validate token before persisting
+    provider
+        .authenticate(&ProviderAuth::Token(token.clone()))
+        .await
+        .map_err(|e| format!("{}", e))?;
 
-    // Set on client
-    state.client.set_token(token).await;
+    // Only save to keyring after validation succeeds
+    let provider_id = state.provider_id.read().await.clone();
+    let entry = get_entry(&prefixed_key(&provider_id, "api_token"))?;
+    entry
+        .set_password(&token)
+        .map_err(|e| format!("Failed to save token: {}", e))?;
     Ok(())
 }
 
-/// Load token from keyring and set it on the client
+/// Load token from keyring and set on provider
 #[tauri::command]
 pub async fn load_saved_token(state: State<'_, AppState>) -> Result<bool, String> {
-    let entry = get_entry(KEYRING_TOKEN_KEY)?;
+    let provider_id = state.provider_id.read().await.clone();
+    let entry = get_entry(&prefixed_key(&provider_id, "api_token"))?;
     match entry.get_password() {
         Ok(token) => {
-            state.client.set_token(token).await;
+            let provider = state.get_provider().await;
+            let _ = provider.authenticate(&ProviderAuth::Token(token)).await;
             Ok(true)
         }
         Err(_) => Ok(false),
@@ -41,47 +54,61 @@ pub async fn load_saved_token(state: State<'_, AppState>) -> Result<bool, String
 /// Clear stored token
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
-    state.client.clear_token().await;
-    let _ = get_entry(KEYRING_TOKEN_KEY).and_then(|e| {
-        e.delete_credential().map_err(|e| format!("{}", e))
-    });
-    let _ = get_entry(KEYRING_REFRESH_KEY).and_then(|e| {
-        e.delete_credential().map_err(|e| format!("{}", e))
-    });
-    let _ = get_entry(KEYRING_CLIENT_ID_KEY).and_then(|e| {
-        e.delete_credential().map_err(|e| format!("{}", e))
-    });
-    let _ = get_entry(KEYRING_CLIENT_SECRET_KEY).and_then(|e| {
-        e.delete_credential().map_err(|e| format!("{}", e))
-    });
+    let provider_id = state.provider_id.read().await.clone();
+
+    // Clear all possible credential keys for this provider
+    for key in &["api_token", "refresh_token", "oauth_client_id", "oauth_client_secret"] {
+        let _ = get_entry(&prefixed_key(&provider_id, key))
+            .and_then(|e| e.delete_credential().map_err(|e| format!("{}", e)));
+    }
+
+    // Reset provider to a fresh instance
+    let new_provider: Arc<dyn crate::providers::DebridProvider> = match provider_id.as_str() {
+        "real-debrid" => Arc::new(RdClient::new()),
+        _ => return Err(format!("Unknown provider: {}", provider_id)),
+    };
+    *state.provider.write().await = new_provider;
+
     Ok(())
 }
 
 /// Check if we're authenticated
 #[tauri::command]
 pub async fn is_authenticated(state: State<'_, AppState>) -> Result<bool, String> {
-    Ok(state.client.has_token().await)
+    let provider = state.get_provider().await;
+    Ok(provider.is_authenticated().await)
 }
 
-/// Get current user info (also validates the token)
+/// Get current user info
 #[tauri::command]
 pub async fn get_user(state: State<'_, AppState>) -> Result<User, String> {
-    state
-        .client
-        .get("/user")
+    let provider = state.get_provider().await;
+    let provider_id = state.provider_id.read().await.clone();
+    let entry = get_entry(&prefixed_key(&provider_id, "api_token"))
+        .map_err(|e| format!("{}", e))?;
+    let token = entry
+        .get_password()
+        .map_err(|_| "No saved token".to_string())?;
+    provider
+        .authenticate(&ProviderAuth::Token(token))
         .await
         .map_err(|e| format!("{}", e))
 }
 
-// ── OAuth2 Device Flow ──
+// ── OAuth2 Device Flow (Real-Debrid specific) ──
+
+fn get_rd_client(provider: &Arc<dyn crate::providers::DebridProvider>) -> Result<&RdClient, String> {
+    provider
+        .as_any()
+        .downcast_ref::<RdClient>()
+        .ok_or_else(|| "OAuth is only supported for Real-Debrid".to_string())
+}
 
 #[tauri::command]
 pub async fn oauth_start(state: State<'_, AppState>) -> Result<DeviceCode, String> {
-    state
-        .client
-        .oauth_device_code()
-        .await
-        .map_err(|e| format!("{}", e))
+    let provider = state.get_provider().await;
+    let rd = get_rd_client(&provider)?;
+    rd.oauth_device_code().await.map_err(|e| format!("{}", e))
 }
 
 #[tauri::command]
@@ -89,20 +116,22 @@ pub async fn oauth_poll_credentials(
     state: State<'_, AppState>,
     device_code: String,
 ) -> Result<Option<DeviceCredentials>, String> {
-    match state
-        .client
+    let provider = state.get_provider().await;
+    let rd = get_rd_client(&provider)?;
+    let provider_id = state.provider_id.read().await.clone();
+
+    match rd
         .oauth_device_credentials::<DeviceCredentials>(&device_code)
         .await
     {
         Ok(creds) => {
-            // Save credentials to keyring
-            let _ = get_entry(KEYRING_CLIENT_ID_KEY)
+            let _ = get_entry(&prefixed_key(&provider_id, "oauth_client_id"))
                 .and_then(|e| e.set_password(&creds.client_id).map_err(|e| format!("{}", e)));
-            let _ = get_entry(KEYRING_CLIENT_SECRET_KEY)
+            let _ = get_entry(&prefixed_key(&provider_id, "oauth_client_secret"))
                 .and_then(|e| e.set_password(&creds.client_secret).map_err(|e| format!("{}", e)));
             Ok(Some(creds))
         }
-        Err(_) => Ok(None), // Not yet authorized, keep polling
+        Err(_) => Ok(None),
     }
 }
 
@@ -113,20 +142,21 @@ pub async fn oauth_get_token(
     client_secret: String,
     device_code: String,
 ) -> Result<OAuthToken, String> {
-    let token: OAuthToken = state
-        .client
+    let provider = state.get_provider().await;
+    let rd = get_rd_client(&provider)?;
+    let provider_id = state.provider_id.read().await.clone();
+
+    let token: OAuthToken = rd
         .oauth_token(&client_id, &client_secret, &device_code)
         .await
         .map_err(|e| format!("{}", e))?;
 
-    // Save tokens
-    let _ = get_entry(KEYRING_TOKEN_KEY)
+    let _ = get_entry(&prefixed_key(&provider_id, "api_token"))
         .and_then(|e| e.set_password(&token.access_token).map_err(|e| format!("{}", e)));
-    let _ = get_entry(KEYRING_REFRESH_KEY)
+    let _ = get_entry(&prefixed_key(&provider_id, "refresh_token"))
         .and_then(|e| e.set_password(&token.refresh_token).map_err(|e| format!("{}", e)));
 
-    // Set on client
-    state.client.set_token(token.access_token.clone()).await;
+    rd.set_token(token.access_token.clone()).await;
 
     Ok(token)
 }
