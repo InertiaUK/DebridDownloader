@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0a0a0a">
-  <title>DebridDownloader — Fast Desktop Client for Real-Debrid</title>
-  <meta name="description" content="The fastest way to download from Real-Debrid. Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage.">
-  <meta property="og:title" content="DebridDownloader — Fast Desktop Client for Real-Debrid">
-  <meta property="og:description" content="The fastest way to download from Real-Debrid. Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage.">
+  <title>DebridDownloader — Fast Desktop Client for Real-Debrid & TorBox</title>
+  <meta name="description" content="The fastest way to download from Real-Debrid and TorBox. Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage.">
+  <meta property="og:title" content="DebridDownloader — Fast Desktop Client for Real-Debrid & TorBox">
+  <meta property="og:description" content="The fastest way to download from Real-Debrid and TorBox. Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://CasaVargas.github.io/DebridDownloader/">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="DebridDownloader — Fast Desktop Client for Real-Debrid">
-  <meta name="twitter:description" content="The fastest way to download from Real-Debrid. Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage.">
+  <meta name="twitter:title" content="DebridDownloader — Fast Desktop Client for Real-Debrid & TorBox">
+  <meta name="twitter:description" content="The fastest way to download from Real-Debrid and TorBox. Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2377C351' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/%3E%3C/svg%3E">
   <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -81,6 +81,39 @@ a:focus-visible, .btn-primary:focus-visible, .btn-secondary:focus-visible, .dl-c
   font-weight: 600;
   margin-bottom: 2rem;
   position: relative;
+}
+.hero-badges {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.hero-badge {
+  margin-bottom: 0;
+}
+.hero-badge-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.2);
+  border-radius: 99px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: #3b82f6;
+  font-weight: 600;
+  position: relative;
+}
+.hero-badge-new .new-tag {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .hero h1 {
   font-size: clamp(2.2rem, 5vw, 3.5rem);
@@ -392,9 +425,12 @@ footer a:hover { color: var(--green); }
 
   <!-- Hero -->
   <header class="hero">
-    <div class="hero-badge" aria-label="Open source software">&#9889; Open Source — GPL 3.0</div>
+    <div class="hero-badges">
+      <div class="hero-badge" aria-label="Open source software">&#9889; Open Source — GPL 3.0</div>
+      <div class="hero-badge-new" aria-label="TorBox support"><span class="new-tag">New</span> TorBox Support</div>
+    </div>
     <h1>The fastest way to<br><span>download from Real-Debrid</span></h1>
-    <p class="subtitle">Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage. No browser needed.</p>
+    <p class="subtitle">Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage. Now with TorBox support.</p>
     <div class="hero-ctas">
       <a id="hero-download" class="btn-primary" href="https://github.com/CasaVargas/DebridDownloader/releases/latest">
         <svg class="os-icon" data-os="mac" aria-hidden="true" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83"/><path d="M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg>
@@ -512,8 +548,8 @@ footer a:hover { color: var(--green); }
       </div>
       <div class="step">
         <div class="step-number" aria-hidden="true">2</div>
-        <h3>Connect Real-Debrid</h3>
-        <p>Paste your API token or log in with OAuth. Stored securely in your OS keychain.</p>
+        <h3>Connect Your Provider</h3>
+        <p>Choose Real-Debrid or TorBox. Paste your API token or log in with OAuth. Stored securely in your OS keychain.</p>
       </div>
       <div class="step">
         <div class="step-number" aria-hidden="true">3</div>
