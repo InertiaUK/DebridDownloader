@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings, updateSettings } from "../api/settings";
 import { getTrackerConfigs, saveTrackerConfigs } from "../api/search";
-import type { AppSettings, TrackerConfig } from "../types";
+import { getAvailableProviders, switchProvider, getActiveProvider } from "../api/providers";
+import type { AppSettings, TrackerConfig, ProviderInfo } from "../types";
 import { open } from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { ACCENT_COLORS } from "../hooks/useAccentColor";
@@ -45,6 +46,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savedField, setSavedField] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [activeProvider, setActiveProvider] = useState("real-debrid");
+  const [switching, setSwitching] = useState(false);
 
   // Add tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
@@ -62,6 +66,8 @@ export default function SettingsPage() {
       setFrontend((prev) => ({ ...prev, launch_at_login: autostart }));
       setTrackers(configs);
     }).finally(() => setLoading(false));
+    getAvailableProviders().then(setProviders).catch(() => {});
+    getActiveProvider().then(setActiveProvider).catch(() => {});
   }, []);
 
   function markSaved(field: string) {
@@ -135,6 +141,22 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSwitchProvider(id: string) {
+    if (id === activeProvider) return;
+    setSwitching(true);
+    try {
+      const hasCredentials = await switchProvider(id);
+      setActiveProvider(id);
+      if (!hasCredentials) {
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Failed to switch provider:", e);
+    } finally {
+      setSwitching(false);
+    }
+  }
+
   async function handleBrowse() {
     const selected = await open({ directory: true, title: "Select download folder" });
     if (selected && typeof selected === "string") {
@@ -165,6 +187,40 @@ export default function SettingsPage() {
 
         {settings && (
           <>
+            {/* ── Debrid Provider ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Debrid Provider
+              </h3>
+              <div className="mb-12">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Active Provider</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                  Select which debrid service to use
+                </p>
+                <div className="flex gap-4">
+                  {providers.map((p) => {
+                    const isSelected = activeProvider === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleSwitchProvider(p.id)}
+                        disabled={switching}
+                        className="flex-1 flex items-center justify-center gap-3 py-4 rounded-xl transition-all text-[15px] font-medium cursor-pointer"
+                        style={{
+                          background: isSelected ? "var(--accent-bg-medium)" : "var(--theme-bg)",
+                          border: isSelected ? "2px solid var(--accent)" : "2px solid var(--theme-border)",
+                          color: isSelected ? "var(--accent)" : "var(--theme-text-muted)",
+                          opacity: switching ? 0.5 : 1,
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
             {/* ── Downloads ── */}
             <section className="mb-20">
               <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">

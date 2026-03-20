@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { getActiveProvider } from "../api/providers";
 
 interface SidebarProps {
   activeView: string;
@@ -18,6 +19,12 @@ export default function Sidebar({
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLButtonElement>(null);
+  const [providerName, setProviderName] = useState("");
+
+  useEffect(() => {
+    const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
+    getActiveProvider().then((id) => setProviderName(names[id] ?? id)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!popoverOpen) return;
@@ -197,6 +204,11 @@ export default function Sidebar({
             <div className="text-[12px] text-[var(--theme-text-muted)]">
               {premiumDays} days left
             </div>
+            {providerName && (
+              <div className="text-[11px] text-[var(--theme-text-ghost)]">
+                {providerName}
+              </div>
+            )}
           </div>
         </button>
 

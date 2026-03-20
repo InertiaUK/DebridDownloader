@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAuth } from "../hooks/useAuth";
 import * as authApi from "../api/auth";
+import { getAuthMethod, getActiveProvider } from "../api/providers";
 
 export default function AuthPage() {
   const { login } = useAuth();
@@ -9,6 +10,16 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"token" | "oauth">("token");
+  const [authMethod, setAuthMethod] = useState<"api_key" | "oauth_device">("oauth_device");
+  const [providerName, setProviderName] = useState("Real-Debrid");
+
+  useEffect(() => {
+    Promise.all([getAuthMethod(), getActiveProvider()]).then(([method, id]) => {
+      setAuthMethod(method);
+      const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
+      setProviderName(names[id] ?? id);
+    }).catch(() => {});
+  }, []);
 
   // OAuth state
   const [userCode, setUserCode] = useState("");
@@ -106,12 +117,12 @@ export default function AuthPage() {
             </span>
           </div>
           <p className="text-[var(--theme-text-secondary)] text-[15px]">
-            Connect your Real-Debrid account
+            Connect your {providerName} account
           </p>
         </div>
 
         {/* Mode toggle */}
-        <div className="flex mb-10 bg-[var(--theme-bg)] rounded-lg p-1.5">
+        {authMethod === "oauth_device" && (<div className="flex mb-10 bg-[var(--theme-bg)] rounded-lg p-1.5">
           <button
             className={`flex-1 py-2.5 text-[15px] rounded-lg transition-colors ${
               mode === "token"
@@ -140,9 +151,9 @@ export default function AuthPage() {
           >
             OAuth Login
           </button>
-        </div>
+        </div>)}
 
-        {mode === "token" ? (
+        {(authMethod === "api_key" || mode === "token") ? (
           <div>
             <label className="block text-[15px] text-[var(--theme-text-secondary)] mb-3">
               API Token
@@ -152,12 +163,15 @@ export default function AuthPage() {
               value={token}
               onChange={(e) => setToken(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleTokenLogin()}
-              placeholder="Paste your token from real-debrid.com/apitoken"
+              placeholder={authMethod === "api_key" ? "Paste your API key" : "Paste your token from real-debrid.com/apitoken"}
               className="w-full px-4 py-3.5 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg text-[var(--theme-text-primary)] placeholder-[var(--theme-text-ghost)] text-[15px] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-all duration-150"
             />
             <p className="text-[14px] text-[var(--theme-text-muted)] mt-3">
-              Get your token at{" "}
-              <span className="text-[#10b981]">real-debrid.com/apitoken</span>
+              {authMethod === "api_key" ? (
+                "Enter the API key from your account settings"
+              ) : (
+                <>Get your token at{" "}<span className="text-[#10b981]">real-debrid.com/apitoken</span></>
+              )}
             </p>
             <button
               onClick={handleTokenLogin}
