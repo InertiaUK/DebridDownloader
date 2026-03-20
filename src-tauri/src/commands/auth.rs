@@ -63,10 +63,7 @@ pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
     }
 
     // Reset provider to a fresh instance
-    let new_provider: Arc<dyn crate::providers::DebridProvider> = match provider_id.as_str() {
-        "real-debrid" => Arc::new(RdClient::new()),
-        _ => return Err(format!("Unknown provider: {}", provider_id)),
-    };
+    let new_provider = create_provider(&provider_id)?;
     *state.provider.write().await = new_provider;
 
     Ok(())
@@ -159,4 +156,67 @@ pub async fn oauth_get_token(
     rd.set_token(token.access_token.clone()).await;
 
     Ok(token)
+}
+
+// ── Provider management ──
+
+use crate::providers::types::ProviderInfo;
+
+/// Factory function to create a provider by ID.
+pub fn create_provider(provider_id: &str) -> Result<Arc<dyn crate::providers::DebridProvider>, String> {
+    match provider_id {
+        "real-debrid" => Ok(Arc::new(RdClient::new())),
+        // "torbox" arm added in Task 7
+        _ => Err(format!("Unknown provider: {}", provider_id)),
+    }
+}
+
+#[tauri::command]
+pub async fn get_available_providers() -> Result<Vec<ProviderInfo>, String> {
+    Ok(crate::providers::available_providers())
+}
+
+#[tauri::command]
+pub async fn get_auth_method(
+    state: State<'_, AppState>,
+) -> Result<crate::providers::types::AuthMethod, String> {
+    let provider = state.get_provider().await;
+    Ok(provider.info().auth_method)
+}
+
+#[tauri::command]
+pub async fn switch_provider(
+    state: State<'_, AppState>,
+    provider_id: String,
+) -> Result<bool, String> {
+    let new_provider = create_provider(&provider_id)?;
+
+    *state.provider.write().await = new_provider;
+    *state.provider_id.write().await = provider_id.clone();
+
+    // Update settings
+    let mut settings = state.settings.write().await;
+    settings.provider = provider_id.clone();
+    drop(settings);
+
+    // Try to load saved credentials
+    let entry = get_entry(&prefixed_key(&provider_id, "api_token"));
+    if let Ok(entry) = entry {
+        if let Ok(token) = entry.get_password() {
+            let provider = state.get_provider().await;
+            match provider.authenticate(&ProviderAuth::Token(token)).await {
+                Ok(_) => return Ok(true),
+                Err(_) => return Ok(false),
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+#[tauri::command]
+pub async fn get_active_provider(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    Ok(state.provider_id.read().await.clone())
 }

@@ -1,4 +1,3 @@
-mod api;
 mod commands;
 mod providers;
 mod downloader;
@@ -71,6 +70,37 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Migrate unprefixed keyring keys to prefixed format
+            {
+                use keyring::Entry;
+                let migrate = || -> Result<(), Box<dyn std::error::Error>> {
+                    let service = "com.jonathan.debriddownloader";
+                    let migration_key = Entry::new(service, "migration_v2_done")?;
+                    if migration_key.get_password().is_ok() {
+                        return Ok(()); // already migrated
+                    }
+
+                    let keys = ["api_token", "refresh_token", "oauth_client_id", "oauth_client_secret"];
+                    for key in &keys {
+                        if let Ok(entry) = Entry::new(service, key) {
+                            if let Ok(value) = entry.get_password() {
+                                let new_key = format!("real-debrid.{}", key);
+                                if let Ok(new_entry) = Entry::new(service, &new_key) {
+                                    let _ = new_entry.set_password(&value);
+                                }
+                                let _ = entry.delete_credential();
+                            }
+                        }
+                    }
+
+                    migration_key.set_password("done")?;
+                    Ok(())
+                };
+                if let Err(e) = migrate() {
+                    log::warn!("Keyring migration failed: {}", e);
+                }
+            }
+
             // Start streaming proxy server
             let state: tauri::State<'_, AppState> = app.state();
             let sessions = state.stream_sessions.clone();
@@ -94,6 +124,11 @@ pub fn run() {
             commands::auth::oauth_start,
             commands::auth::oauth_poll_credentials,
             commands::auth::oauth_get_token,
+            // Provider management
+            commands::auth::get_available_providers,
+            commands::auth::get_auth_method,
+            commands::auth::switch_provider,
+            commands::auth::get_active_provider,
             // Torrents
             commands::torrents::list_torrents,
             commands::torrents::get_torrent_info,
