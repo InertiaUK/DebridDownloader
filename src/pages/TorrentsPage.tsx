@@ -154,7 +154,7 @@ export default function TorrentsPage() {
       try {
         const data = await torrentsApi.getTorrentInfo(selectedId);
         setDetailInfo(data);
-        setSelectedFiles(new Set(data.files.filter((f) => f.selected === 1).map((f) => f.id)));
+        setSelectedFiles(new Set(data.files.filter((f) => f.selected).map((f) => f.id)));
       } catch (e) {
         setDetailError(String(e));
       } finally {

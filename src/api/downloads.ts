@@ -1,22 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   DownloadItem,
+  DownloadLink,
   DownloadTask,
-  UnrestrictedLink,
 } from "../types";
-
-export async function unrestrictLink(link: string): Promise<UnrestrictedLink> {
-  return invoke("unrestrict_link", { link });
-}
 
 export async function unrestrictTorrentLinks(
   torrentId: string
-): Promise<UnrestrictedLink[]> {
+): Promise<DownloadLink[]> {
   return invoke("unrestrict_torrent_links", { torrentId });
 }
 
 export async function startDownloads(
-  links: UnrestrictedLink[],
+  links: DownloadLink[],
   destinationFolder: string,
   torrentName?: string
 ): Promise<string[]> {

@@ -35,7 +35,7 @@ export default function Sidebar({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [popoverOpen]);
 
-  const premiumDays = user
+  const premiumDays = user?.expiration
     ? Math.ceil(
         (new Date(user.expiration).getTime() - Date.now()) / 86400000
       )
@@ -180,14 +180,7 @@ export default function Sidebar({
           onClick={() => setPopoverOpen((prev) => !prev)}
           className="flex items-center gap-2.5 w-full text-left"
         >
-          {user?.avatar ? (
-            <img
-              src={user.avatar}
-              alt={user.username}
-              className="w-8 h-8 rounded-full"
-            />
-          ) : (
-            <div
+          <div
               className="w-8 h-8 rounded-full flex items-center justify-center font-semibold"
               style={{
                 backgroundColor: "rgba(16,185,129,0.15)",
@@ -197,7 +190,6 @@ export default function Sidebar({
             >
               {user?.username?.charAt(0).toUpperCase() ?? "?"}
             </div>
-          )}
           <div className="min-w-0">
             <div className="text-[14px] text-[var(--theme-text-primary)] font-medium truncate">
               {user?.username}
