@@ -1,5 +1,7 @@
 pub mod piratebay;
+pub mod torznab;
 pub mod utils;
+pub use utils::format_size;
 
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -48,8 +50,10 @@ pub struct TrackerConfig {
     pub id: String,
     pub name: String,
     pub url: String,
-    pub tracker_type: String, // "piratebay_api"
+    pub tracker_type: String, // "piratebay_api" | "torznab"
     pub enabled: bool,
+    #[serde(default)]
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -85,37 +89,47 @@ pub fn extract_info_hash(magnet: &str) -> Option<String> {
     Some(hash.to_lowercase())
 }
 
-pub fn format_size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    if bytes == 0 {
-        return "0 B".to_string();
-    }
-    let exp = (bytes as f64).log(1024.0).floor() as usize;
-    let exp = exp.min(UNITS.len() - 1);
-    let size = bytes as f64 / 1024_f64.powi(exp as i32);
-    format!("{:.1} {}", size, UNITS[exp])
-}
-
 const SCRAPER_TIMEOUT_SECS: u64 = 10;
 
 /// Build scrapers from user-configured tracker list
-fn build_scrapers(configs: &[TrackerConfig]) -> Vec<Box<dyn TorrentScraper>> {
-    configs
-        .iter()
-        .filter(|c| c.enabled)
-        .filter_map(|config| -> Option<Box<dyn TorrentScraper>> {
-            match config.tracker_type.as_str() {
-                "piratebay_api" => Some(Box::new(piratebay::PirateBayScraper::new(config.url.clone()))),
-                _ => None,
+fn build_scrapers(configs: &[TrackerConfig]) -> (Vec<Box<dyn TorrentScraper>>, Vec<TrackerStatus>) {
+    let mut scrapers: Vec<Box<dyn TorrentScraper>> = Vec::new();
+    let mut config_errors: Vec<TrackerStatus> = Vec::new();
+
+    for config in configs.iter().filter(|c| c.enabled) {
+        match config.tracker_type.as_str() {
+            "piratebay_api" => {
+                scrapers.push(Box::new(piratebay::PirateBayScraper::new(config.url.clone())));
             }
-        })
-        .collect()
+            "torznab" => {
+                match &config.api_key {
+                    Some(key) if !key.is_empty() => {
+                        scrapers.push(Box::new(torznab::TorznabScraper::new(
+                            config.name.clone(),
+                            config.url.clone(),
+                            key.clone(),
+                        )));
+                    }
+                    _ => {
+                        config_errors.push(TrackerStatus {
+                            name: config.name.clone(),
+                            ok: false,
+                            error: Some("Missing API key — configure in Settings".into()),
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    (scrapers, config_errors)
 }
 
 pub async fn search_all(params: &SearchParams, tracker_configs: &[TrackerConfig]) -> SearchResponse {
-    let scrapers = build_scrapers(tracker_configs);
+    let (scrapers, config_errors) = build_scrapers(tracker_configs);
 
-    if scrapers.is_empty() {
+    if scrapers.is_empty() && config_errors.is_empty() {
         return SearchResponse {
             results: vec![],
             tracker_status: vec![TrackerStatus {
@@ -123,6 +137,12 @@ pub async fn search_all(params: &SearchParams, tracker_configs: &[TrackerConfig]
                 ok: false,
                 error: Some("No trackers configured. Add trackers in Settings.".to_string()),
             }],
+        };
+    }
+    if scrapers.is_empty() {
+        return SearchResponse {
+            results: vec![],
+            tracker_status: config_errors,
         };
     }
 
@@ -169,6 +189,7 @@ pub async fn search_all(params: &SearchParams, tracker_configs: &[TrackerConfig]
         tracker_status.push(status);
         all_results.extend(results);
     }
+    tracker_status.extend(config_errors);
 
     let mut seen = std::collections::HashSet::new();
     all_results.retain(|r| {
