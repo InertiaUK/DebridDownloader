@@ -84,7 +84,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
           rm certificate.p12
 
+      # Build only — no release upload (tauri-action race conditions corrupt assets)
       - name: Build Tauri app
+        id: tauri-build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,60 +98,98 @@ jobs:
           APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "DebridDownloader ${{ github.ref_name }}"
-          releaseBody: |
-            ## Downloads
-
-            | Platform | Architecture | File |
-            |----------|-------------|------|
-            | macOS | Apple Silicon (M1/M2/M3) | `.dmg` (aarch64) |
-            | macOS | Intel | `.dmg` (x64) |
-            | Windows | x64 | `.exe` installer |
-            | Windows | ARM64 | `.exe` installer |
-            | Linux | x64 | `.deb` / `.rpm` / `.AppImage` |
-            | Linux | ARM64 | `.deb` / `.rpm` / `.AppImage` |
-          releaseDraft: true
-          prerelease: false
           args: --target ${{ matrix.target }}
 
-  # After all builds finish, generate a single latest.json from the release assets
-  publish-updater:
+      # Upload all build artifacts for the publish job
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.name }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          if-no-files-found: error
+
+  # Single job creates release and uploads everything — no race conditions
+  publish:
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - name: Generate updater JSON
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: List all artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create release and upload assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-
           REPO="${GITHUB_REPOSITORY}"
           VERSION="${TAG#v}"
 
-          # Get the draft release for this tag
-          RELEASE=$(gh api "repos/${REPO}/releases" --jq ".[] | select(.tag_name == \"${TAG}\")")
-          RELEASE_ID=$(echo "$RELEASE" | jq -r '.id')
-          PUB_DATE=$(echo "$RELEASE" | jq -r '.created_at')
-          NOTES=$(echo "$RELEASE" | jq -r '.body // ""')
+          # Create draft release
+          RELEASE_ID=$(gh api "repos/${REPO}/releases" \
+            -f tag_name="${TAG}" \
+            -f name="DebridDownloader ${TAG}" \
+            -f body="## Downloads
 
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "ERROR: No release found for tag ${TAG}"
-            exit 1
-          fi
+          | Platform | Architecture | File |
+          |----------|-------------|------|
+          | macOS | Apple Silicon (M1/M2/M3) | \`.dmg\` (aarch64) |
+          | macOS | Intel | \`.dmg\` (x64) |
+          | Windows | x64 | \`.exe\` installer |
+          | Windows | ARM64 | \`.exe\` installer |
+          | Linux | x64 | \`.deb\` / \`.rpm\` / \`.AppImage\` |
+          | Linux | ARM64 | \`.deb\` / \`.rpm\` / \`.AppImage\` |" \
+            -F draft=true \
+            -F prerelease=false \
+            --jq '.id')
 
-          # Get all assets
+          echo "Created draft release ${RELEASE_ID}"
+
+          # Collect all files to upload (skip directories and .app bundles)
+          UPLOAD_FILES=()
+          while IFS= read -r f; do
+            # Skip .app directories (macOS app bundles are dirs, we want the .tar.gz)
+            [[ "$f" == *.app/* ]] && continue
+            [[ "$f" == *"/icons/"* ]] && continue
+            UPLOAD_FILES+=("$f")
+          done < <(find artifacts -type f \
+            \( -name "*.dmg" -o -name "*.exe" -o -name "*.msi" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.AppImage" -o -name "*.AppImage.tar.gz" -o -name "*.AppImage.tar.gz.sig" \
+               -o -name "*.AppImage.sig" \
+               -o -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" \
+               -o -name "*.nsis.zip" -o -name "*.nsis.zip.sig" \
+               -o -name "*.msi.zip" -o -name "*.msi.zip.sig" \
+               -o -name "*.deb.sig" -o -name "*.rpm.sig" \
+               -o -name "*.dmg.sig" -o -name "*.exe.sig" -o -name "*.msi.sig" \) \
+            | sort)
+
+          echo "=== Files to upload (${#UPLOAD_FILES[@]}) ==="
+          printf '%s\n' "${UPLOAD_FILES[@]}"
+
+          # Upload each file
+          for f in "${UPLOAD_FILES[@]}"; do
+            BASENAME=$(basename "$f")
+            echo "Uploading ${BASENAME}..."
+            gh release upload "${TAG}" "$f" --repo "${REPO}" --clobber
+          done
+
+          echo "=== All assets uploaded ==="
+
+          # Now generate latest.json from uploaded assets
           ASSETS=$(gh api "repos/${REPO}/releases/${RELEASE_ID}/assets")
 
-          # Helper: find asset URL by exact name suffix
           asset_url() {
             echo "$ASSETS" | jq -r --arg suffix "$1" \
               '[.[] | select(.name | endswith($suffix)) | .browser_download_url][0] // ""'
           }
 
-          # Helper: download .sig file content by exact name suffix
           sig_content() {
             local asset_id
             asset_id=$(echo "$ASSETS" | jq -r --arg suffix "$1" \
@@ -162,32 +202,25 @@ jobs:
             fi
           }
 
-          # Build platforms object using exact filename suffixes
-          # macOS aarch64
+          # macOS
           DARWIN_AARCH64_URL=$(asset_url "_aarch64.app.tar.gz")
           DARWIN_AARCH64_SIG=$(sig_content "_aarch64.app.tar.gz.sig")
-
-          # macOS x86_64
           DARWIN_X64_URL=$(asset_url "_x64.app.tar.gz")
           DARWIN_X64_SIG=$(sig_content "_x64.app.tar.gz.sig")
 
-          # Windows x86_64
+          # Windows
           WINDOWS_X64_URL=$(asset_url "_x64-setup.nsis.zip")
           WINDOWS_X64_SIG=$(sig_content "_x64-setup.nsis.zip.sig")
-
-          # Windows aarch64
           WINDOWS_AARCH64_URL=$(asset_url "_arm64-setup.nsis.zip")
           WINDOWS_AARCH64_SIG=$(sig_content "_arm64-setup.nsis.zip.sig")
 
-          # Linux x86_64
+          # Linux
           LINUX_X64_URL=$(asset_url "_amd64.AppImage.tar.gz")
           LINUX_X64_SIG=$(sig_content "_amd64.AppImage.tar.gz.sig")
-
-          # Linux aarch64
           LINUX_AARCH64_URL=$(asset_url "_aarch64.AppImage.tar.gz")
           LINUX_AARCH64_SIG=$(sig_content "_aarch64.AppImage.tar.gz.sig")
 
-          echo "=== Platform URLs found ==="
+          echo "=== Platform URLs ==="
           echo "darwin-aarch64: ${DARWIN_AARCH64_URL:-MISSING}"
           echo "darwin-x86_64:  ${DARWIN_X64_URL:-MISSING}"
           echo "windows-x86_64: ${WINDOWS_X64_URL:-MISSING}"
@@ -195,11 +228,9 @@ jobs:
           echo "linux-x86_64:  ${LINUX_X64_URL:-MISSING}"
           echo "linux-aarch64: ${LINUX_AARCH64_URL:-MISSING}"
 
-          # Build JSON with jq
           LATEST_JSON=$(jq -n \
             --arg version "$VERSION" \
-            --arg notes "$NOTES" \
-            --arg pub_date "$PUB_DATE" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg darwin_aarch64_url "$DARWIN_AARCH64_URL" \
             --arg darwin_aarch64_sig "$DARWIN_AARCH64_SIG" \
             --arg darwin_x64_url "$DARWIN_X64_URL" \
@@ -214,7 +245,6 @@ jobs:
             --arg linux_aarch64_sig "$LINUX_AARCH64_SIG" \
             '{
               version: $version,
-              notes: $notes,
               pub_date: $pub_date,
               platforms: (
                 {}
@@ -228,19 +258,10 @@ jobs:
             }')
 
           echo "$LATEST_JSON" > latest.json
-          echo "Generated latest.json:"
+          echo "=== latest.json ==="
           cat latest.json
-
-          # Delete existing latest.json asset if present
-          EXISTING_ID=$(echo "$ASSETS" | jq -r '.[] | select(.name == "latest.json") | .id' | head -1)
-          if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
-            gh api -X DELETE "repos/${REPO}/releases/assets/${EXISTING_ID}"
-            echo "Deleted existing latest.json asset"
-          fi
-
-          # Upload latest.json
-          gh release upload "$TAG" latest.json --repo "$REPO" --clobber
-          echo "Uploaded latest.json to release ${TAG}"
+          gh release upload "${TAG}" latest.json --repo "${REPO}" --clobber
+          echo "Done — release ${TAG} ready for review"
 
   # Separate job for build checks (workflow_dispatch, no release)
   build-check:
