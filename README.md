@@ -4,7 +4,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-1.1.1-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.1.4-orange?style=for-the-badge)
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
 ![Tauri](https://img.shields.io/badge/tauri-%2324C8DB.svg?style=for-the-badge&logo=tauri&logoColor=%23FFFFFF)
@@ -19,8 +19,11 @@
 | | Feature | Description |
 |---|---------|-------------|
 | 🧲 | **Torrent Management** | Add magnets or `.torrent` files, select files, monitor progress |
+| 🔗 | **Magnet Link Handler** | Set as default magnet handler — links add to torrents instantly |
 | 🔍 | **User-Configured Search** | Add your own tracker sources in Settings — the app ships with none |
+| 📡 | **Torznab Support** | Connect private trackers via Torznab API with API key auth |
 | 📥 | **Download Engine** | Multi-threaded downloads with real-time speed, ETA, and progress |
+| 🔄 | **Auto-Updater** | In-app updates — never miss a release |
 | 🎯 | **System Tray** | Runs in the background with menu bar / system tray icon |
 | 🚀 | **Launch at Login** | Optionally start when your computer boots |
 | ⌨️ | **Keyboard First** | `⌘K` search, `⌘R` refresh, arrow nav, `Enter` to download |
@@ -83,8 +86,10 @@ The app **ships with no trackers built in**. You add your own sources in **Setti
 
 1. Go to **Settings** in the sidebar
 2. Scroll to the **Trackers** section
-3. Enter a name, base URL, and click **Add**
-4. The app supports sites with a TPB-compatible JSON API (`/q.php?q=query`)
+3. Enter a name, base URL, select the type, and click **Add**
+4. Supported types:
+   - **PirateBay API** — sites with a TPB-compatible JSON API (`/q.php?q=query`)
+   - **Torznab** — private trackers with Torznab API support (requires API key)
 
 You can add multiple trackers — searches run in parallel across all enabled sources. Each tracker can be toggled on/off individually.
 
