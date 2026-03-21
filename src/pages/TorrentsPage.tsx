@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMiniPlayer } from "../contexts/MiniPlayerContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import DataTable, { type Column } from "../components/DataTable";
 import TableToolbar from "../components/TableToolbar";
@@ -70,6 +71,8 @@ export default function TorrentsPage() {
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  const { openPreview, isLoading: miniPlayerLoading } = useMiniPlayer();
 
   // Streaming state
   const [streamingFileId, setStreamingFileId] = useState<number | null>(null);
@@ -332,6 +335,21 @@ export default function TorrentsPage() {
       width: "120px",
       render: (t) => (
         <div className="flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => openPreview(t.id)}
+            disabled={miniPlayerLoading}
+            className="w-[30px] h-[30px] rounded-md flex items-center justify-center cursor-pointer transition-colors"
+            style={{ background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}
+            title="Preview Video"
+          >
+            {miniPlayerLoading ? (
+              <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            )}
+          </button>
           {t.status === "downloaded" && (
             <button
               onClick={() => handleDownloadTorrent(t.id)}
@@ -632,10 +650,16 @@ export default function TorrentsPage() {
           className="fixed bg-[var(--theme-bg-surface)] border border-[var(--theme-border)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_var(--theme-shadow)]"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 220),
-            top: Math.min(contextMenu.y, window.innerHeight - 160),
+            top: Math.min(contextMenu.y, window.innerHeight - 200),
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          <button
+            className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
+            onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); openPreview(id); }}
+          >
+            Preview
+          </button>
           <button
             className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
             onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); handleDownloadTorrent(id); }}
