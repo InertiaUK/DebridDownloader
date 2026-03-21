@@ -37,8 +37,14 @@ function App() {
 
   const handleMagnetLink = useCallback(
     (event: { uri: string; displayName: string | null }) => {
-      torrentsApi.addMagnet(event.uri).then(() => {
+      torrentsApi.addMagnet(event.uri).then(async (response) => {
         clearCurrentUriRef.current();
+        // Auto-select all files so the torrent starts processing immediately
+        try {
+          await torrentsApi.selectTorrentFiles(response.id, "all");
+        } catch (e) {
+          console.error("Failed to auto-select files:", e);
+        }
         navigateRef.current?.("/torrents");
       }).catch((e) => {
         console.error("Failed to add magnet:", e);
