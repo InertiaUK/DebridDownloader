@@ -396,7 +396,7 @@ export default function SettingsPage() {
                       type="text"
                       value={newTrackerUrl}
                       onChange={(e) => setNewTrackerUrl(e.target.value)}
-                      placeholder={newTrackerType === "torznab" ? "Base URL (e.g., http://localhost:9696/1/api)" : "Base URL (e.g., https://apibay.org)"}
+                      placeholder={newTrackerType === "torznab" ? "Base URL (e.g., http://localhost:9696/1/api)" : "Base URL (e.g., https://example.org)"}
                       onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
                       className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                     />
