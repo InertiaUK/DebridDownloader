@@ -57,6 +57,7 @@ export default function SettingsPage() {
   const [newTrackerName, setNewTrackerName] = useState("");
   const [newTrackerUrl, setNewTrackerUrl] = useState("");
   const [newTrackerType, setNewTrackerType] = useState("piratebay_api");
+  const [newTrackerApiKey, setNewTrackerApiKey] = useState("");
 
   // Load backend settings + autostart status + trackers
   useEffect(() => {
@@ -110,6 +111,7 @@ export default function SettingsPage() {
       url,
       tracker_type: newTrackerType,
       enabled: true,
+      api_key: newTrackerApiKey.trim() || undefined,
     };
     const next = [...trackers, config];
     setTrackers(next);
@@ -121,6 +123,7 @@ export default function SettingsPage() {
     }
     setNewTrackerName("");
     setNewTrackerUrl("");
+    setNewTrackerApiKey("");
   }
 
   async function handleRemoveTracker(id: string) {
@@ -344,7 +347,7 @@ export default function SettingsPage() {
                         <div className="text-[13px] text-[var(--theme-text-muted)] truncate">{tracker.url}</div>
                       </div>
                       <span className="text-[12px] text-[var(--theme-text-ghost)] shrink-0 px-2 py-1 rounded-md" style={{ background: "var(--theme-selected)" }}>
-                        {tracker.tracker_type === "piratebay_api" ? "API" : "HTML"}
+                        {tracker.tracker_type === "piratebay_api" ? "API" : tracker.tracker_type === "torznab" ? "Torznab" : tracker.tracker_type}
                       </span>
                       <button
                         onClick={() => handleRemoveTracker(tracker.id)}
@@ -385,6 +388,7 @@ export default function SettingsPage() {
                       className="w-[160px] bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] outline-none"
                     >
                       <option value="piratebay_api">API (TPB-style)</option>
+                      <option value="torznab">Torznab (Prowlarr/Jackett)</option>
                     </select>
                   </div>
                   <div className="flex gap-3">
@@ -392,7 +396,7 @@ export default function SettingsPage() {
                       type="text"
                       value={newTrackerUrl}
                       onChange={(e) => setNewTrackerUrl(e.target.value)}
-                      placeholder="Base URL (e.g., https://example.org)"
+                      placeholder={newTrackerType === "torznab" ? "Base URL (e.g., http://localhost:9696/1/api)" : "Base URL (e.g., https://apibay.org)"}
                       onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
                       className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                     />
@@ -405,13 +409,35 @@ export default function SettingsPage() {
                       Add
                     </button>
                   </div>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={newTrackerApiKey}
+                      onChange={(e) => setNewTrackerApiKey(e.target.value)}
+                      placeholder={newTrackerType === "torznab" ? "API Key (required for Torznab)" : "API Key (optional)"}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
+                      className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                    />
+                  </div>
+                  {newTrackerType === "torznab" && !newTrackerApiKey.trim() && (
+                    <p className="text-[13px] text-[#f59e0b]">Torznab trackers require an API key to authenticate</p>
+                  )}
                 </div>
                 <div className="mt-5 pt-5" style={{ borderTop: "1px solid var(--theme-border-subtle)" }}>
                   <div className="text-[13px] text-[var(--theme-text-muted)] font-medium mb-3">How it works</div>
                   <div className="text-[13px] text-[var(--theme-text-ghost)]">
                     <div className="p-3 rounded-lg" style={{ background: "var(--theme-bg-content)" }}>
-                      <p>Enter the base URL of a site with a TPB-compatible JSON API. The app queries <code className="text-[var(--theme-text-muted)] px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>/q.php?q=search_term</code> and expects a JSON array of results with fields: name, info_hash, seeders, leechers, size, added, category.</p>
-                      <p className="mt-2 text-[var(--theme-text-muted)]">Need help finding compatible sources? Check the <a href="https://github.com/CasaVargas/DebridDownloader/discussions" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>community discussions</a>.</p>
+                      {newTrackerType === "torznab" ? (
+                        <>
+                          <p>Connect to a Torznab-compatible indexer (Prowlarr, Jackett, etc.). Enter the API endpoint URL and your API key. The app queries the Torznab API and parses the XML response for search results.</p>
+                          <p className="mt-2 text-[var(--theme-text-muted)]">Find your API URL and key in your indexer manager's settings. For Prowlarr, it's typically <code className="text-[var(--theme-text-muted)] px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>http://localhost:9696/&#123;indexer_id&#125;/api</code>.</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>Enter the base URL of a site with a TPB-compatible JSON API. The app queries <code className="text-[var(--theme-text-muted)] px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>/q.php?q=search_term</code> and expects a JSON array of results with fields: name, info_hash, seeders, leechers, size, added, category.</p>
+                          <p className="mt-2 text-[var(--theme-text-muted)]">Need help finding compatible sources? Check the <a href="https://github.com/CasaVargas/DebridDownloader/discussions" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>community discussions</a>.</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
