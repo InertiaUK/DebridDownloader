@@ -110,14 +110,16 @@ impl TorrentScraper for ProwlarrScraper {
             let results: Vec<SearchResult> = items
                 .into_iter()
                 .filter_map(|item| {
-                    // Get magnet URL from guid (if it's a magnet), magnet_url field, or skip
-                    let magnet = if let Some(ref m) = item.magnet_url {
-                        if !m.is_empty() { m.clone() } else if item.guid.starts_with("magnet:") { item.guid.clone() } else { return None; }
-                    } else if item.guid.starts_with("magnet:") {
-                        item.guid.clone()
-                    } else {
-                        return None;
-                    };
+                    // Get magnet URL — only accept strings that start with "magnet:"
+                    let magnet = [
+                        item.magnet_url.as_deref(),
+                        Some(item.guid.as_str()),
+                        item.download_url.as_deref(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .find(|s| s.starts_with("magnet:"))
+                    .map(|s| s.to_string())?;
 
                     // Extract info_hash
                     let info_hash = item.info_hash
