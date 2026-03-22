@@ -302,7 +302,7 @@ export default function AboutPage() {
 
         {/* Streamline teaser */}
         <a
-          href="https://casavargas.app/streamline"
+          href="https://getstreamline.tv"
           target="_blank"
           rel="noopener noreferrer"
           className="w-full flex items-center gap-4 rounded-xl transition-colors"
