@@ -15,6 +15,7 @@ type UpdateStatus =
 export default function AboutPage() {
   const [status, setStatus] = useState<UpdateStatus>({ state: "idle" });
   const [version, setVersion] = useState("");
+  const [changelogExpanded, setChangelogExpanded] = useState(false);
 
   useEffect(() => {
     getVersion().then(setVersion);
@@ -143,18 +144,18 @@ export default function AboutPage() {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center overflow-y-auto">
-      <div className="flex flex-col items-center text-center" style={{ maxWidth: 420, padding: "60px 32px" }}>
+    <div className="flex-1 overflow-y-auto">
+      <div className="flex flex-col items-center text-center mx-auto" style={{ maxWidth: 420, padding: "40px 32px" }}>
         <img
           src="/app-icon.png"
           alt="DebridDownloader"
-          className="rounded-[20px]"
-          style={{ width: 96, height: 96, boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}
+          className="rounded-[16px]"
+          style={{ width: 72, height: 72, boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}
         />
 
         <h1
           className="text-[var(--theme-text-primary)] font-bold tracking-[-0.5px]"
-          style={{ fontSize: 24, marginTop: 24 }}
+          style={{ fontSize: 22, marginTop: 16 }}
         >
           DebridDownloader
         </h1>
@@ -218,7 +219,7 @@ export default function AboutPage() {
                 "6 accent color themes with dark and light mode",
               ],
             },
-          ].map((entry, i) => (
+          ].filter((_, i) => changelogExpanded || i === 0).map((entry, i) => (
             <div
               key={entry.version}
               className={i > 0 ? "mt-4 pt-4" : ""}
@@ -247,12 +248,18 @@ export default function AboutPage() {
               </ul>
             </div>
           ))}
+          <button
+            onClick={() => setChangelogExpanded((v) => !v)}
+            className="text-[12px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors mt-3 cursor-pointer"
+          >
+            {changelogExpanded ? "Show less" : "Show older releases"}
+          </button>
         </div>
 
         <div
           className="w-full rounded-xl"
           style={{
-            marginTop: 32,
+            marginTop: 24,
             padding: "24px",
             background: "var(--theme-bg)",
             border: "1px solid var(--theme-border)",
