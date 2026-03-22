@@ -92,12 +92,17 @@ export default function SettingsPage() {
     const sectionIds = ["general", "downloads", "trackers", "behavior", "appearance"];
     const observer = new IntersectionObserver(
       (entries) => {
+        // Pick the topmost intersecting section
+        let topmost: { id: string; top: number } | null = null;
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            const id = entry.target.id.replace("section-", "");
-            setActiveSection(id);
+            const top = entry.boundingClientRect.top;
+            if (!topmost || top < topmost.top) {
+              topmost = { id: entry.target.id.replace("section-", ""), top };
+            }
           }
         }
+        if (topmost) setActiveSection(topmost.id);
       },
       {
         root: container,
@@ -240,7 +245,7 @@ export default function SettingsPage() {
       >
         <div className="text-[13px] font-semibold text-[var(--theme-text-muted)] px-3 pb-4">Settings</div>
         {[
-          { id: "general", label: "General", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> },
+          { id: "general", label: "General", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
           { id: "downloads", label: "Downloads", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> },
           { id: "trackers", label: "Trackers", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> },
           { id: "behavior", label: "Behavior", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> },
@@ -269,27 +274,31 @@ export default function SettingsPage() {
         <section id="section-general" className="mb-12">
           <h3 className="text-[18px] font-semibold text-[var(--theme-text-primary)] mb-1">General</h3>
           <p className="text-[13px] text-[var(--theme-text-muted)] mb-5">Debrid provider</p>
-          <div className="flex gap-3">
-            {providers.map((p) => {
-              const isSelected = activeProvider === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => handleSwitchProvider(p.id)}
-                  disabled={switching}
-                  className="flex-1 py-3 rounded-xl text-[14px] font-medium transition-all cursor-pointer"
-                  style={{
-                    background: isSelected ? "var(--accent-bg-medium)" : "var(--theme-bg)",
-                    border: isSelected ? "2px solid var(--accent)" : "2px solid var(--theme-border)",
-                    color: isSelected ? "var(--accent)" : "var(--theme-text-muted)",
-                    opacity: switching ? 0.5 : 1,
-                    textAlign: "center",
-                  }}
-                >
-                  {p.name}
-                </button>
-              );
-            })}
+          <div className="rounded-xl overflow-hidden" style={{ background: "var(--theme-bg)", border: "1px solid var(--theme-border)" }}>
+            <div className="px-5 py-4">
+              <div className="flex gap-3">
+                {providers.map((p) => {
+                  const isSelected = activeProvider === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => handleSwitchProvider(p.id)}
+                      disabled={switching}
+                      className="flex-1 py-3 rounded-xl text-[14px] font-medium transition-all cursor-pointer"
+                      style={{
+                        background: isSelected ? "var(--accent-bg-medium)" : "var(--theme-bg-content)",
+                        border: isSelected ? "2px solid var(--accent)" : "2px solid var(--theme-border)",
+                        color: isSelected ? "var(--accent)" : "var(--theme-text-muted)",
+                        opacity: switching ? 0.5 : 1,
+                        textAlign: "center",
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -592,8 +601,9 @@ export default function SettingsPage() {
           <h3 className="text-[18px] font-semibold text-[var(--theme-text-primary)] mb-1">Appearance</h3>
           <p className="text-[13px] text-[var(--theme-text-muted)] mb-5">Theme and accent color</p>
 
+          <div className="rounded-xl overflow-hidden" style={{ background: "var(--theme-bg)", border: "1px solid var(--theme-border)" }}>
           {/* Theme */}
-          <div className="mb-5">
+          <div className="px-5 py-4">
             <div className="text-[13px] text-[var(--theme-text-muted)] mb-2">Theme</div>
             <div className="flex gap-3">
               {[
@@ -619,8 +629,9 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <div className="border-t border-[var(--theme-border-subtle)]" />
           {/* Accent color */}
-          <div>
+          <div className="px-5 py-4">
             <div className="text-[13px] text-[var(--theme-text-muted)] mb-2">Accent Color</div>
             <div className="grid grid-cols-3 gap-2">
               {[
@@ -659,6 +670,7 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+          </div>
           </div>
         </section>
       </div>
