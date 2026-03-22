@@ -190,6 +190,16 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
+              version: "1.1.9",
+              title: "Prowlarr Integration & Polish",
+              items: [
+                "Native Prowlarr scraper — search all indexers in one query",
+                "Better error messages for Torznab misconfiguration",
+                "What's New section on About page",
+                "Privacy policy page on website",
+              ],
+            },
+            {
               version: "1.1.8",
               title: "Video Preview & Floating Mini-Player",
               items: [
