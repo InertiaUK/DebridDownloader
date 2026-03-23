@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod downloads;
 pub mod magnet;
+pub mod rclone;
 pub mod search;
 pub mod settings;
 pub mod streaming;
