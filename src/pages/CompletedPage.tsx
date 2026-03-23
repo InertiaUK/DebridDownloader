@@ -45,7 +45,17 @@ export default function CompletedPage() {
       header: "Name",
       width: "1fr",
       sortable: true,
-      render: (t) => <div className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</div>,
+      render: (t) => (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</span>
+          {t.remote && (
+            <svg className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <title>{t.remote}</title>
+              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+            </svg>
+          )}
+        </div>
+      ),
     },
     {
       key: "total_bytes",
@@ -66,7 +76,7 @@ export default function CompletedPage() {
       width: "160px",
       render: (t) => (
         <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          {t.destination && (
+          {t.destination && !t.remote && (
             <button
               onClick={(e) => { e.stopPropagation(); revealItemInDir(t.destination).catch(() => {}); }}
               className="px-3 py-1.5 rounded-md text-[13px] font-medium text-[var(--accent)] hover:bg-[var(--accent-bg-light)] transition-colors"
