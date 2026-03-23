@@ -32,22 +32,30 @@ New Tauri commands:
 
 ### Smart Destination Detection
 
-The app detects rclone remotes by pattern: `name:` or `name:path/to/folder` (alphanumeric/hyphen/underscore name followed by a colon). Applies everywhere a destination is entered.
+The app detects rclone remotes by pattern: `name:` or `name:path/to/folder` (alphanumeric/hyphen/underscore name followed by a colon). Detection happens on the **frontend** — when it matches, the frontend passes the remote prefix separately. Applies everywhere a destination is entered.
 
 When an rclone remote is detected:
 - Skip native folder picker validation
 - Validate remote name exists via `rclone listremotes`
 - If rclone not installed, show error: "This looks like an rclone remote but rclone is not installed"
 
+### Path Construction
+
+rclone remote paths are NOT filesystem paths. Never use `PathBuf` for rclone destinations — use string formatting: `format!("{}/{}", remote_base, filename)`. The existing `sanitize_filename` function must only be applied to the filename component, never to the remote prefix (it strips colons, which would mangle `gdrive:` into `gdrive_`).
+
+### Security: Command Execution
+
+rclone MUST be spawned via `Command::new("rclone").arg("rcat").arg(full_path)` — direct exec with separate arguments, never shell string interpolation. This prevents command injection from crafted remote names or filenames.
+
 ### Download Engine — Piping to rclone
 
 When `start_downloads` detects an rclone destination, it calls `download_to_rclone` instead of `download_file`:
 
 1. **HTTP stream starts** — `reqwest::Client` GETs the debrid URL, gets a byte stream
-2. **Spawn rclone child process** — `rclone rcat "remote:path/filename"` with stdin piped, stderr captured. Pass `--size` flag when total bytes are known.
-3. **Pipe loop** — chunks from HTTP stream written to rclone's stdin. Progress tracked by bytes written to pipe (same counters as local downloads).
+2. **Spawn rclone child process** — `Command::new("rclone").args(["rcat", "--size", size_str, "--timeout", "0", full_remote_path])` with stdin piped, stderr captured. `--size` enables optimal chunking. `--timeout 0` disables rclone's internal idle timeout (the app handles its own cancellation).
+3. **Pipe loop** — chunks from HTTP stream written to rclone's stdin. Progress tracked by bytes written to pipe. **Note:** progress reflects bytes piped to rclone, not bytes confirmed uploaded to the remote — if the debrid download is faster than the upload, the user may see near-100% while rclone is still uploading. This is acceptable; the download status remains "Downloading" until rclone exits successfully.
 4. **Completion** — HTTP stream ends → close stdin → wait for rclone exit. Exit 0 = success, else capture stderr as error.
-5. **Cancellation** — same `tokio::select!` with cancel_rx. On cancel, kill rclone child process.
+5. **Cancellation** — same `tokio::select!` with cancel_rx. On cancel, kill rclone child process, then run `rclone deletefile "remote:path/filename"` to clean up the partial upload (fire-and-forget, don't block on it). Partial files on cloud remotes cause problems for media servers.
 
 ### Data Model Changes
 
@@ -87,7 +95,7 @@ This field is used by the frontend to show the remote indicator icon and by the 
 | Invalid remote name | Validation error before download starts |
 | rclone exits non-zero | Capture stderr, show as download error |
 | Network failure mid-stream | rclone process dies, stderr captured as error |
-| User cancels | Kill rclone child process, clean up |
+| User cancels | Kill rclone child process, delete partial remote file |
 | Remote quota full | rclone stderr: "quota exceeded", shown in UI |
 
 ## What This Does NOT Include
@@ -97,3 +105,4 @@ This field is used by the frontend to show the remote indicator icon and by the 
 - Resume/retry for partial rclone transfers
 - rclone daemon/RC API integration
 - Native cloud SDK implementations
+- Custom rclone config path support (users must use default config location)
