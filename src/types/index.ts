@@ -133,6 +133,9 @@ export interface AppSettings {
   create_torrent_subfolders: boolean;
   theme: string;
   provider: string;
+  symlink_mode?: boolean;
+  symlink_mount_path?: string | null;
+  symlink_library_path?: string | null;
 }
 
 // ── Search ──
