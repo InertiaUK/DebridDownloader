@@ -1,6 +1,7 @@
 mod commands;
 mod providers;
 mod downloader;
+mod rclone;
 mod scrapers;
 mod state;
 mod streaming;
