@@ -58,6 +58,8 @@ export default function SettingsPage() {
   const [pathError, setPathError] = useState<string | null>(null);
   const [pathInput, setPathInput] = useState("");
   const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mountPath, setMountPath] = useState("");
+  const [libraryPath, setLibraryPath] = useState("");
 
   // Add tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
@@ -74,6 +76,8 @@ export default function SettingsPage() {
     ]).then(([s, autostart, configs]) => {
       setSettings(s);
       setPathInput(s.download_folder ?? "");
+      setMountPath(s.symlink_mount_path ?? "");
+      setLibraryPath(s.symlink_library_path ?? "");
       setFrontend((prev) => ({ ...prev, launch_at_login: autostart }));
       setTrackers(configs);
     }).finally(() => setLoading(false));
@@ -176,6 +180,24 @@ export default function SettingsPage() {
     const selected = await open({ directory: true, title: "Select download folder" });
     if (selected && typeof selected === "string") {
       handlePathSet(selected);
+    }
+  }
+
+  async function handleBrowseMount() {
+    const selected = await open({ directory: true, title: "Select mount path" });
+    if (selected && typeof selected === "string") {
+      setMountPath(selected);
+      await applyChange({ symlink_mount_path: selected });
+      markSaved("symlink_mount_path");
+    }
+  }
+
+  async function handleBrowseLibrary() {
+    const selected = await open({ directory: true, title: "Select library folder" });
+    if (selected && typeof selected === "string") {
+      setLibraryPath(selected);
+      await applyChange({ symlink_library_path: selected });
+      markSaved("symlink_library_path");
     }
   }
 
@@ -451,6 +473,102 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
+              )}
+            </section>
+
+            {/* ── Symlink Mode ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Symlink Mode
+              </h3>
+
+              <ToggleRow
+                label="Create symlinks instead of downloading"
+                description="Link files from your debrid mount to your media library — zero transfer, instant availability"
+                checked={settings.symlink_mode ?? false}
+                saved={savedField === "symlink_mode"}
+                accentColor={accentColor}
+                onChange={async (v) => {
+                  await applyChange({ symlink_mode: v });
+                  markSaved("symlink_mode");
+                }}
+              />
+
+              {settings.symlink_mode && (
+                <>
+                  {/* Mount Path */}
+                  <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">Mount Path</span>
+                      {savedField === "symlink_mount_path" && (
+                        <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
+                      )}
+                    </div>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                      Where your debrid files appear on the rclone mount
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={mountPath}
+                        onChange={(e) => {
+                          setMountPath(e.target.value);
+                          applyChange({ symlink_mount_path: e.target.value || null });
+                        }}
+                        placeholder="/Volumes/realdebrid/torrents"
+                        className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors min-w-0"
+                      />
+                      <button
+                        onClick={handleBrowseMount}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 self-stretch"
+                        style={{ padding: "0 28px" }}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Library Folder */}
+                  <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">Library Folder</span>
+                      {savedField === "symlink_library_path" && (
+                        <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
+                      )}
+                    </div>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                      Where Plex/Jellyfin scans for media
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={libraryPath}
+                        onChange={(e) => {
+                          setLibraryPath(e.target.value);
+                          applyChange({ symlink_library_path: e.target.value || null });
+                        }}
+                        placeholder="/media/Movies"
+                        className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors min-w-0"
+                      />
+                      <button
+                        onClick={handleBrowseLibrary}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 self-stretch"
+                        style={{ padding: "0 28px" }}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Warning if paths not set */}
+                  {(!mountPath || !libraryPath) && (
+                    <div className="p-4 rounded-xl mb-12" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+                      <p className="text-[13px] text-[#f59e0b]">
+                        Both mount path and library folder must be configured for symlink mode to work
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </section>
 
