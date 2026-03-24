@@ -7,6 +7,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { setMagnetHandler } from "../api/magnet";
 import { ACCENT_COLORS } from "../hooks/useAccentColor";
+import { useRclone, isRclonePath } from "../hooks/useRclone";
+import { validateRcloneRemote } from "../api/rclone";
 
 interface FrontendSettings {
   auto_start_downloads: boolean;
@@ -52,6 +54,12 @@ export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [activeProvider, setActiveProvider] = useState("real-debrid");
   const [switching, setSwitching] = useState(false);
+  const { rcloneInfo, remotes, refreshRemotes } = useRclone();
+  const [pathError, setPathError] = useState<string | null>(null);
+  const [pathInput, setPathInput] = useState("");
+  const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mountPath, setMountPath] = useState("");
+  const [libraryPath, setLibraryPath] = useState("");
 
   // Add tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
@@ -67,6 +75,9 @@ export default function SettingsPage() {
       getTrackerConfigs().catch(() => [] as TrackerConfig[]),
     ]).then(([s, autostart, configs]) => {
       setSettings(s);
+      setPathInput(s.download_folder ?? "");
+      setMountPath(s.symlink_mount_path ?? "");
+      setLibraryPath(s.symlink_library_path ?? "");
       setFrontend((prev) => ({ ...prev, launch_at_login: autostart }));
       setTrackers(configs);
     }).finally(() => setLoading(false));
@@ -168,9 +179,61 @@ export default function SettingsPage() {
   async function handleBrowse() {
     const selected = await open({ directory: true, title: "Select download folder" });
     if (selected && typeof selected === "string") {
-      await applyChange({ download_folder: selected });
-      markSaved("download_folder");
+      handlePathSet(selected);
     }
+  }
+
+  async function handleBrowseMount() {
+    const selected = await open({ directory: true, title: "Select mount path" });
+    if (selected && typeof selected === "string") {
+      setMountPath(selected);
+      await applyChange({ symlink_mount_path: selected });
+      markSaved("symlink_mount_path");
+    }
+  }
+
+  async function handleBrowseLibrary() {
+    const selected = await open({ directory: true, title: "Select library folder" });
+    if (selected && typeof selected === "string") {
+      setLibraryPath(selected);
+      await applyChange({ symlink_library_path: selected });
+      markSaved("symlink_library_path");
+    }
+  }
+
+  function handlePathInput(newPath: string) {
+    setPathInput(newPath);
+    setPathError(null);
+
+    // Debounce: save + validate after 500ms of no typing
+    if (validateTimerRef.current) clearTimeout(validateTimerRef.current);
+    validateTimerRef.current = setTimeout(async () => {
+      await applyChange({ download_folder: newPath || null });
+      markSaved("download_folder");
+
+      // Advisory validation for rclone paths
+      if (isRclonePath(newPath)) {
+        if (!rcloneInfo?.available) {
+          setPathError("This looks like an rclone remote but rclone is not installed");
+          return;
+        }
+        try {
+          const remoteName = newPath.split(":")[0];
+          const valid = await validateRcloneRemote(remoteName);
+          if (!valid) {
+            setPathError(`Remote "${remoteName}" not found in rclone config`);
+          }
+        } catch { /* ignore validation errors */ }
+      }
+    }, 500);
+  }
+
+  function handlePathSet(newPath: string) {
+    // Immediate set (for browse button and remote clicks)
+    setPathInput(newPath);
+    setPathError(null);
+    applyChange({ download_folder: newPath || null });
+    markSaved("download_folder");
   }
 
   if (loading) {
@@ -237,18 +300,28 @@ export default function SettingsPage() {
 
               {/* Download folder */}
               <div className="mb-12">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-[15px] text-[var(--theme-text-primary)]">Download Folder</span>
                   {savedField === "download_folder" && (
                     <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
                   )}
                 </div>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                  Local path or rclone remote (e.g. gdrive:Media/Movies)
+                </p>
                 <div className="flex items-center gap-3">
-                  <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] truncate flex-1 min-w-0">
-                    {settings.download_folder ? (
-                      <span className="text-[var(--theme-text-secondary)]">{settings.download_folder}</span>
-                    ) : (
-                      <span className="text-[var(--theme-text-ghost)]">Not set — you'll be asked each time</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg overflow-hidden">
+                    <input
+                      type="text"
+                      value={pathInput}
+                      onChange={(e) => handlePathInput(e.target.value)}
+                      placeholder="Not set — you'll be asked each time"
+                      className="flex-1 bg-transparent p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none min-w-0"
+                    />
+                    {isRclonePath(pathInput) && (
+                      <svg className="w-5 h-5 shrink-0 mr-3" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                      </svg>
                     )}
                   </div>
                   <button
@@ -259,6 +332,9 @@ export default function SettingsPage() {
                     Browse
                   </button>
                 </div>
+                {pathError && (
+                  <p className="text-[#ef4444] text-[13px] mt-2">{pathError}</p>
+                )}
               </div>
 
               {/* Max concurrent */}
@@ -306,6 +382,194 @@ export default function SettingsPage() {
                 accentColor={accentColor}
                 onChange={(v) => applyFrontend({ auto_start_downloads: v })}
               />
+            </section>
+
+            {/* ── rclone ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Remote Downloads
+              </h3>
+              {rcloneInfo?.available ? (
+                <>
+                  <div className="mb-12">
+                    <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">rclone</span>
+                    <p className="text-[14px] text-[var(--theme-text-muted)]">
+                      {rcloneInfo.version} — download directly to cloud storage without using local disk
+                    </p>
+                  </div>
+
+                  <div className="mb-12">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">Your Remotes</span>
+                      <button
+                        onClick={refreshRemotes}
+                        className="text-[13px] font-medium transition-colors"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        {remotes.length > 0 ? "Refresh" : "Load Remotes"}
+                      </button>
+                    </div>
+                    {remotes.length > 0 ? (
+                      <div className="space-y-2">
+                        {remotes.map((remote) => (
+                          <button
+                            key={remote}
+                            onClick={() => handlePathSet(remote)}
+                            className="w-full flex items-center gap-3 p-4 rounded-xl transition-all text-left"
+                            style={{
+                              background: "var(--theme-bg)",
+                              border: pathInput === remote ? `2px solid var(--accent)` : "2px solid var(--theme-border)",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (pathInput !== remote) (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border-hover)";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (pathInput !== remote) (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border)";
+                            }}
+                          >
+                            <svg className="w-5 h-5 shrink-0" style={{ color: pathInput === remote ? "var(--accent)" : "var(--theme-text-muted)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                            </svg>
+                            <span
+                              className="text-[15px] font-medium"
+                              style={{ color: pathInput === remote ? "var(--accent)" : "var(--theme-text-primary)" }}
+                            >
+                              {remote}
+                            </span>
+                            {pathInput === remote && (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0" style={{ color: "var(--accent)" }}>
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-5 rounded-xl text-center" style={{ background: "var(--theme-bg)", border: "1px dashed var(--theme-border)" }}>
+                        <p className="text-[14px] text-[var(--theme-text-muted)]">Click "Load Remotes" to see your configured rclone remotes</p>
+                        <p className="text-[13px] text-[var(--theme-text-ghost)] mt-1">Set up remotes with <code className="px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>rclone config</code> in your terminal</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="mb-12">
+                  <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">rclone</span>
+                  <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                    Stream downloads directly to Google Drive, OneDrive, S3, or any cloud storage — no local disk needed
+                  </p>
+                  <div className="p-5 rounded-xl" style={{ background: "var(--theme-bg)", border: "1px dashed var(--theme-border)" }}>
+                    <p className="text-[14px] text-[var(--theme-text-muted)]">
+                      rclone not detected — install from{" "}
+                      <a
+                        href="https://rclone.org/install/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--accent)", textDecoration: "underline" }}
+                      >
+                        rclone.org
+                      </a>
+                      {" "}to enable remote downloads
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* ── Symlink Mode ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Symlink Mode
+              </h3>
+
+              <ToggleRow
+                label="Create symlinks instead of downloading"
+                description="Link files from your debrid mount to your media library — zero transfer, instant availability"
+                checked={settings.symlink_mode ?? false}
+                saved={savedField === "symlink_mode"}
+                accentColor={accentColor}
+                onChange={async (v) => {
+                  await applyChange({ symlink_mode: v });
+                  markSaved("symlink_mode");
+                }}
+              />
+
+              {settings.symlink_mode && (
+                <>
+                  {/* Mount Path */}
+                  <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">Mount Path</span>
+                      {savedField === "symlink_mount_path" && (
+                        <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
+                      )}
+                    </div>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                      Where your debrid files appear on the rclone mount
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={mountPath}
+                        onChange={(e) => {
+                          setMountPath(e.target.value);
+                          applyChange({ symlink_mount_path: e.target.value || null });
+                        }}
+                        placeholder="/Volumes/realdebrid/torrents"
+                        className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors min-w-0"
+                      />
+                      <button
+                        onClick={handleBrowseMount}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 self-stretch"
+                        style={{ padding: "0 28px" }}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Library Folder */}
+                  <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">Library Folder</span>
+                      {savedField === "symlink_library_path" && (
+                        <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
+                      )}
+                    </div>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                      Where Plex/Jellyfin scans for media
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={libraryPath}
+                        onChange={(e) => {
+                          setLibraryPath(e.target.value);
+                          applyChange({ symlink_library_path: e.target.value || null });
+                        }}
+                        placeholder="/media/Movies"
+                        className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors min-w-0"
+                      />
+                      <button
+                        onClick={handleBrowseLibrary}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 self-stretch"
+                        style={{ padding: "0 28px" }}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Warning if paths not set */}
+                  {(!mountPath || !libraryPath) && (
+                    <div className="p-4 rounded-xl mb-12" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+                      <p className="text-[13px] text-[#f59e0b]">
+                        Both mount path and library folder must be configured for symlink mode to work
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </section>
 
             {/* ── Trackers ── */}
@@ -371,76 +635,72 @@ export default function SettingsPage() {
               )}
 
               {/* Add new tracker */}
-              <div className="p-5 rounded-xl" style={{ background: "var(--theme-bg)", border: "1px solid var(--theme-border)" }}>
-                <div className="text-[14px] text-[var(--theme-text-primary)] font-medium mb-4">Add Tracker</div>
+              <div className="mb-12">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Add Tracker</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-5">
+                  {newTrackerType === "torznab"
+                    ? "Connect to a Torznab-compatible indexer (Prowlarr, Jackett)"
+                    : newTrackerType === "prowlarr"
+                    ? "Connect to Prowlarr to search all configured indexers"
+                    : "Connect to a site with a TPB-compatible JSON API"}
+                </p>
+
                 <div className="flex flex-col gap-3">
+                  {/* Row 1: Name + Type */}
                   <div className="flex gap-3">
                     <input
                       type="text"
                       value={newTrackerName}
                       onChange={(e) => setNewTrackerName(e.target.value)}
                       placeholder="Tracker name"
-                      className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
+                      className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
                     />
                     <select
                       value={newTrackerType}
                       onChange={(e) => setNewTrackerType(e.target.value)}
-                      className="w-[160px] bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] outline-none"
+                      className="w-[200px] bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
                     >
                       <option value="piratebay_api">API (TPB-style)</option>
-                      <option value="torznab">Torznab (Prowlarr/Jackett)</option>
-                      <option value="prowlarr">Prowlarr (All Indexers)</option>
+                      <option value="torznab">Torznab</option>
+                      <option value="prowlarr">Prowlarr</option>
                     </select>
                   </div>
-                  <div className="flex gap-3">
-                    <input
-                      type="text"
-                      value={newTrackerUrl}
-                      onChange={(e) => setNewTrackerUrl(e.target.value)}
-                      placeholder={newTrackerType === "prowlarr" ? "Prowlarr URL (e.g., http://localhost:9696)" : newTrackerType === "torznab" ? "Base URL (e.g., http://localhost:9696/1/api)" : "Base URL (e.g., https://example.org)"}
-                      onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
-                      className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
-                    />
-                    <button
-                      onClick={handleAddTracker}
-                      disabled={!newTrackerName.trim() || !newTrackerUrl.trim()}
-                      className="rounded-lg text-white text-[14px] font-medium disabled:opacity-30 transition-colors shrink-0"
-                      style={{ background: "var(--accent)", padding: "12px 28px" }}
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex gap-3">
+
+                  {/* Row 2: URL */}
+                  <input
+                    type="text"
+                    value={newTrackerUrl}
+                    onChange={(e) => setNewTrackerUrl(e.target.value)}
+                    placeholder={newTrackerType === "prowlarr" ? "http://localhost:9696" : newTrackerType === "torznab" ? "http://localhost:9696/1/api" : "https://example.org"}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
+                    className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                  />
+
+                  {/* Row 3: API Key (if needed) */}
+                  {(newTrackerType === "torznab" || newTrackerType === "prowlarr" || newTrackerApiKey) && (
                     <input
                       type="text"
                       value={newTrackerApiKey}
                       onChange={(e) => setNewTrackerApiKey(e.target.value)}
-                      placeholder={newTrackerType === "torznab" ? "API Key (required for Torznab)" : "API Key (optional)"}
+                      placeholder={newTrackerType === "torznab" ? "API Key (required)" : "API Key (optional)"}
                       onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
-                      className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                      className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                     />
-                  </div>
-                  {newTrackerType === "torznab" && !newTrackerApiKey.trim() && (
-                    <p className="text-[13px] text-[#f59e0b]">Torznab trackers require an API key to authenticate</p>
                   )}
-                </div>
-                <div className="mt-5 pt-5" style={{ borderTop: "1px solid var(--theme-border-subtle)" }}>
-                  <div className="text-[13px] text-[var(--theme-text-muted)] font-medium mb-3">How it works</div>
-                  <div className="text-[13px] text-[var(--theme-text-ghost)]">
-                    <div className="p-3 rounded-lg" style={{ background: "var(--theme-bg-content)" }}>
-                      {newTrackerType === "torznab" ? (
-                        <>
-                          <p>Connect to a Torznab-compatible indexer (Prowlarr, Jackett, etc.). Enter the API endpoint URL and your API key. The app queries the Torznab API and parses the XML response for search results.</p>
-                          <p className="mt-2 text-[var(--theme-text-muted)]">Find your API URL and key in your indexer manager's settings. For Prowlarr, it's typically <code className="text-[var(--theme-text-muted)] px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>http://localhost:9696/&#123;indexer_id&#125;/api</code>.</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>Enter the base URL of a site with a TPB-compatible JSON API. The app queries <code className="text-[var(--theme-text-muted)] px-1 py-0.5 rounded" style={{ background: "var(--theme-selected)" }}>/q.php?q=search_term</code> and expects a JSON array of results with fields: name, info_hash, seeders, leechers, size, added, category.</p>
-                          <p className="mt-2 text-[var(--theme-text-muted)]">Need help finding compatible sources? Check the <a href="https://github.com/CasaVargas/DebridDownloader/discussions" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>community discussions</a>.</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
+
+                  {newTrackerType === "torznab" && !newTrackerApiKey.trim() && (
+                    <p className="text-[13px] text-[#f59e0b]">Torznab trackers require an API key</p>
+                  )}
+
+                  {/* Add button */}
+                  <button
+                    onClick={handleAddTracker}
+                    disabled={!newTrackerName.trim() || !newTrackerUrl.trim()}
+                    className="w-full rounded-lg text-white text-[15px] font-medium disabled:opacity-30 transition-colors py-4"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    Add Tracker
+                  </button>
                 </div>
               </div>
             </section>

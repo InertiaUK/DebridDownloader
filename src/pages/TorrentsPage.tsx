@@ -236,8 +236,15 @@ export default function TorrentsPage() {
     const torrent = torrents.find((t) => t.id === id);
     if (!torrent) return;
     try {
+      // Symlink mode: backend uses library path from settings, no folder picker needed
       let folder = settings?.download_folder ?? null;
-      if (!folder) {
+      if (settings?.symlink_mode) {
+        if (!settings?.symlink_mount_path || !settings?.symlink_library_path) {
+          setError("Symlink mode is on but mount path or library folder is not configured. Check Settings.");
+          return;
+        }
+        folder = settings.symlink_library_path;
+      } else if (!folder) {
         const picked = await open({ directory: true, title: "Select download folder" });
         if (!picked) return;
         folder = picked as string;
@@ -264,7 +271,14 @@ export default function TorrentsPage() {
     try {
       const s = await getSettings();
       let folder = s.download_folder;
-      if (!folder) {
+      if (s.symlink_mode) {
+        if (!s.symlink_mount_path || !s.symlink_library_path) {
+          setDetailError("Symlink mode is on but mount path or library folder is not configured. Check Settings.");
+          setDownloading(false);
+          return;
+        }
+        folder = s.symlink_library_path;
+      } else if (!folder) {
         const picked = await open({ directory: true, title: "Select download folder" });
         if (!picked) { setDownloading(false); return; }
         folder = picked as string;

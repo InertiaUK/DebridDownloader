@@ -97,7 +97,38 @@ export default function DownloadsPage() {
         const pct = t.total_bytes > 0 ? (t.downloaded_bytes / t.total_bytes) * 100 : 0;
         return (
           <div>
-            <div className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</span>
+              {t.remote && t.remote !== "symlink" && (
+                <svg
+                  className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <title>{t.remote}</title>
+                  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                </svg>
+              )}
+              {t.remote === "symlink" && (
+                <svg
+                  className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <title>Symlinked</title>
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              )}
+            </div>
             {active && pct > 0 && (
               <div className="mt-1.5 h-[3px] rounded-full bg-[rgba(59,130,246,0.08)]">
                 <div className="h-full bg-[#3b82f6] rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -272,7 +303,19 @@ export default function DownloadsPage() {
                         <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{formatBytes(task.downloaded_bytes)} <span className="text-[var(--theme-text-muted)]">of</span> {formatBytes(task.total_bytes)}</div>
                       </div>
                       <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Destination</div>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px]">Destination</span>
+                          {task.remote && task.remote !== "symlink" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
+                              Remote
+                            </span>
+                          )}
+                          {task.remote === "symlink" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
+                              Symlink
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[14px] text-[var(--theme-text-primary)] font-medium truncate">{task.destination || "--"}</div>
                       </div>
                     </div>
@@ -284,7 +327,19 @@ export default function DownloadsPage() {
                     <p className="text-[#ef4444] text-[15px]">{getDownloadStatusText(task.status)}</p>
                     {task.destination && (
                       <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Destination</div>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px]">Destination</span>
+                          {task.remote && task.remote !== "symlink" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
+                              Remote
+                            </span>
+                          )}
+                          {task.remote === "symlink" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
+                              Symlink
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[15px] text-[var(--theme-text-primary)] font-medium break-all">{task.destination}</div>
                       </div>
                     )}

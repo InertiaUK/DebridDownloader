@@ -1,6 +1,7 @@
 mod commands;
 mod providers;
 mod downloader;
+mod rclone;
 mod scrapers;
 mod state;
 mod streaming;
@@ -214,6 +215,10 @@ pub fn run() {
             // Magnet link handler
             commands::magnet::set_magnet_handler,
             commands::magnet::get_pending_magnet_uri,
+            // rclone
+            commands::rclone::check_rclone,
+            commands::rclone::list_rclone_remotes,
+            commands::rclone::validate_rclone_remote,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

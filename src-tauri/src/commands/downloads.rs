@@ -1,8 +1,9 @@
 use crate::providers::types::{DownloadItem, DownloadLink};
 use crate::downloader;
+use crate::rclone;
 use crate::state::{AppState, DownloadStatus, DownloadTask};
 use std::path::PathBuf;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 /// Get download links for a torrent (replaces unrestrict_torrent_links)
 #[tauri::command]
@@ -29,33 +30,162 @@ pub async fn start_downloads(
     let settings = state.settings.read().await;
     let create_subfolders = settings.create_torrent_subfolders;
     let max_concurrent = settings.max_concurrent_downloads as usize;
+    let symlink_mode = settings.symlink_mode;
+    let symlink_mount_path = settings.symlink_mount_path.clone();
+    let symlink_library_path = settings.symlink_library_path.clone();
     drop(settings);
+
+    // Symlink mode: create symlinks instead of downloading
+    if symlink_mode {
+        let mount_path = symlink_mount_path
+            .ok_or_else(|| "Symlink mode is on but no mount path configured".to_string())?;
+        let library_path = symlink_library_path
+            .ok_or_else(|| "Symlink mode is on but no library folder configured".to_string())?;
+
+        // Verify mount path exists
+        if !tokio::fs::try_exists(&mount_path).await.unwrap_or(false) {
+            return Err("Mount path not found — is your rclone mount running?".to_string());
+        }
+
+        let mut task_ids = Vec::new();
+
+        for link in &links {
+            let id = uuid::Uuid::new_v4().to_string();
+
+            // Source: file on the rclone mount
+            // Try with torrent subfolder first, then flat — mount structure varies
+            let source = if let Some(ref name) = torrent_name {
+                let with_subfolder = PathBuf::from(&mount_path)
+                    .join(name)
+                    .join(&link.filename);
+                if tokio::fs::try_exists(&with_subfolder).await.unwrap_or(false) {
+                    with_subfolder
+                } else {
+                    // Try flat (single-file torrents or flat mount)
+                    PathBuf::from(&mount_path).join(&link.filename)
+                }
+            } else {
+                PathBuf::from(&mount_path).join(&link.filename)
+            };
+
+            // Destination: symlink in the library folder
+            let dest = if create_subfolders {
+                if let Some(ref name) = torrent_name {
+                    PathBuf::from(&library_path)
+                        .join(sanitize_filename(name))
+                        .join(sanitize_filename(&link.filename))
+                } else {
+                    PathBuf::from(&library_path).join(sanitize_filename(&link.filename))
+                }
+            } else {
+                PathBuf::from(&library_path).join(sanitize_filename(&link.filename))
+            };
+
+            // Create parent directories
+            if let Some(parent) = dest.parent() {
+                tokio::fs::create_dir_all(parent).await
+                    .map_err(|e| format!("Failed to create library directory: {}", e))?;
+            }
+
+            // Verify source file exists on the mount
+            if !tokio::fs::try_exists(&source).await.unwrap_or(false) {
+                return Err(format!(
+                    "File not found on mount: {} — torrent may still be processing",
+                    source.display()
+                ));
+            }
+
+            // Remove existing symlink if present
+            if tokio::fs::symlink_metadata(&dest).await.is_ok() {
+                let _ = tokio::fs::remove_file(&dest).await;
+            }
+
+            // Create symlink
+            #[cfg(unix)]
+            tokio::fs::symlink(&source, &dest).await
+                .map_err(|e| format!("Failed to create symlink: {}", e))?;
+
+            let task = DownloadTask {
+                id: id.clone(),
+                filename: link.filename.clone(),
+                url: link.download.clone(),
+                destination: dest.to_string_lossy().to_string(),
+                total_bytes: link.filesize,
+                downloaded_bytes: link.filesize,
+                speed: 0.0,
+                status: DownloadStatus::Completed,
+                remote: Some("symlink".to_string()),
+            };
+
+            state.active_downloads.write().await.insert(id.clone(), task.clone());
+
+            // Emit completion event
+            let progress = crate::downloader::DownloadProgress {
+                id: id.clone(),
+                filename: task.filename.clone(),
+                downloaded_bytes: task.total_bytes,
+                total_bytes: task.total_bytes,
+                speed: 0.0,
+                status: DownloadStatus::Completed,
+                remote: Some("symlink".to_string()),
+            };
+            let _ = app.emit("download-progress", &progress);
+
+            task_ids.push(id);
+        }
+
+        return Ok(task_ids);
+    }
 
     let mut task_ids = Vec::new();
 
     for link in &links {
         let id = uuid::Uuid::new_v4().to_string();
-        let dest = if create_subfolders {
-            if let Some(ref name) = torrent_name {
-                PathBuf::from(&destination_folder)
-                    .join(sanitize_filename(name))
-                    .join(sanitize_filename(&link.filename))
+        let is_remote = rclone::is_rclone_path(&destination_folder);
+
+        let dest = if is_remote {
+            // rclone paths: string concatenation, NOT PathBuf
+            let base = destination_folder.trim_end_matches('/');
+            if create_subfolders {
+                if let Some(ref name) = torrent_name {
+                    format!("{}/{}/{}", base, sanitize_filename(name), sanitize_filename(&link.filename))
+                } else {
+                    format!("{}/{}", base, sanitize_filename(&link.filename))
+                }
+            } else {
+                format!("{}/{}", base, sanitize_filename(&link.filename))
+            }
+        } else {
+            // Local paths: use PathBuf as before
+            if create_subfolders {
+                if let Some(ref name) = torrent_name {
+                    PathBuf::from(&destination_folder)
+                        .join(sanitize_filename(name))
+                        .join(sanitize_filename(&link.filename))
+                } else {
+                    PathBuf::from(&destination_folder).join(sanitize_filename(&link.filename))
+                }
             } else {
                 PathBuf::from(&destination_folder).join(sanitize_filename(&link.filename))
             }
-        } else {
-            PathBuf::from(&destination_folder).join(sanitize_filename(&link.filename))
+            .to_string_lossy()
+            .to_string()
         };
 
         let task = DownloadTask {
             id: id.clone(),
             filename: link.filename.clone(),
             url: link.download.clone(),
-            destination: dest.to_string_lossy().to_string(),
+            destination: dest,
             total_bytes: link.filesize,
             downloaded_bytes: 0,
             speed: 0.0,
             status: DownloadStatus::Pending,
+            remote: if is_remote {
+                Some(destination_folder.clone())
+            } else {
+                None
+            },
         };
 
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
@@ -90,8 +220,11 @@ pub async fn start_downloads(
                     }
                 };
 
-                let result =
-                    downloader::download_file(app, &mut task, &mut cancel_rx).await;
+                let result = if task.remote.is_some() {
+                    crate::rclone::download_to_rclone(app, &mut task, &mut cancel_rx).await
+                } else {
+                    downloader::download_file(app, &mut task, &mut cancel_rx).await
+                };
 
                 if let Err(e) = result {
                     task.status = DownloadStatus::Failed(e);

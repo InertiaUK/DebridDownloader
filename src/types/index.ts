@@ -112,6 +112,7 @@ export interface DownloadTask {
   downloaded_bytes: number;
   speed: number;
   status: DownloadStatus;
+  remote?: string | null;
 }
 
 export interface DownloadProgress {
@@ -121,6 +122,7 @@ export interface DownloadProgress {
   total_bytes: number;
   speed: number;
   status: DownloadStatus;
+  remote?: string | null;
 }
 
 // ── Settings ──
@@ -131,6 +133,9 @@ export interface AppSettings {
   create_torrent_subfolders: boolean;
   theme: string;
   provider: string;
+  symlink_mode?: boolean;
+  symlink_mount_path?: string | null;
+  symlink_library_path?: string | null;
 }
 
 // ── Search ──
@@ -172,4 +177,11 @@ export interface TrackerConfig {
 export interface StreamUrlResponse {
   stream_url: string;
   session_id: string;
+}
+
+// ── rclone ──
+
+export interface RcloneInfo {
+  version: string;
+  available: boolean;
 }
