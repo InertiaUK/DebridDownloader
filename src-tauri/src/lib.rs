@@ -5,6 +5,7 @@ mod rclone;
 mod scrapers;
 mod state;
 mod streaming;
+mod watchlist;
 
 use state::AppState;
 use tauri::{

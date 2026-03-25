@@ -1,9 +1,12 @@
 use crate::providers::DebridProvider;
+use crate::watchlist::{WatchMatch, WatchRule};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -77,6 +80,10 @@ pub struct AppState {
     pub cancel_tokens: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
     pub streaming_port: Arc<RwLock<Option<u16>>>,
     pub stream_sessions: Arc<RwLock<HashMap<String, StreamSession>>>,
+    pub watch_rules: Arc<RwLock<Vec<WatchRule>>>,
+    pub watch_matches: Arc<RwLock<Vec<WatchMatch>>>,
+    pub watch_seen: Arc<RwLock<HashMap<String, HashSet<String>>>>,
+    pub watch_cancel: CancellationToken,
 }
 
 impl AppState {
@@ -91,6 +98,10 @@ impl AppState {
             cancel_tokens: Arc::new(RwLock::new(HashMap::new())),
             streaming_port: Arc::new(RwLock::new(None)),
             stream_sessions: Arc::new(RwLock::new(HashMap::new())),
+            watch_rules: Arc::new(RwLock::new(Vec::new())),
+            watch_matches: Arc::new(RwLock::new(Vec::new())),
+            watch_seen: Arc::new(RwLock::new(HashMap::new())),
+            watch_cancel: CancellationToken::new(),
         }
     }
 
