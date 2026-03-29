@@ -4,6 +4,7 @@ mod downloader;
 mod media_parser;
 mod rclone;
 mod tmdb;
+mod organizer;
 mod scrapers;
 mod state;
 mod streaming;
