@@ -190,6 +190,16 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
+              version: "1.4.0",
+              title: "Media Intelligence",
+              items: [
+                "Auto-organize downloads into Movies/TV folder structures",
+                "TMDb metadata lookup for correct titles and years",
+                "Plex, Jellyfin, and Emby library scan triggers",
+                "Test Connection for media server configuration",
+              ],
+            },
+            {
               version: "1.3.0",
               title: "Watch List & Native Notifications",
               items: [
@@ -320,9 +330,9 @@ export default function AboutPage() {
           </a>
         </div>
 
-        {/* Streamline teaser */}
+        {/* Casa Vargas */}
         <a
-          href="https://getstreamline.tv"
+          href="https://casavargas.app"
           target="_blank"
           rel="noopener noreferrer"
           className="w-full flex items-center gap-4 rounded-xl transition-colors"
@@ -336,12 +346,17 @@ export default function AboutPage() {
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border-hover)"; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border)"; }}
         >
-          <div className="text-[28px] shrink-0">📺</div>
+          <img
+            src="/casavargas-logo-orange.png"
+            alt="Casa Vargas"
+            className="shrink-0 rounded-lg"
+            style={{ width: 36, height: 36 }}
+          />
           <div className="flex-1 min-w-0 text-left">
-            <div className="text-[14px] font-semibold text-[var(--theme-text-primary)]">Streamline</div>
-            <div className="text-[12px] text-[var(--theme-text-muted)] mt-0.5">Native IPTV client for iPhone, iPad, Apple TV, and Mac</div>
+            <div className="text-[14px] font-semibold text-[var(--theme-text-primary)]">Casa Vargas</div>
+            <div className="text-[12px] text-[var(--theme-text-muted)] mt-0.5">Check out my other projects</div>
           </div>
-          <div className="text-[12px] text-[var(--theme-text-ghost)] shrink-0">Also by Casa Vargas →</div>
+          <div className="text-[12px] text-[var(--theme-text-ghost)] shrink-0">casavargas.app →</div>
         </a>
 
         <div
