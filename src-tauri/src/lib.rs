@@ -266,6 +266,9 @@ pub fn run() {
             commands::watchlist::get_watch_matches,
             commands::watchlist::clear_watch_matches,
             commands::watchlist::run_watch_rule_now,
+            // Backup
+            commands::backup::export_settings,
+            commands::backup::import_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

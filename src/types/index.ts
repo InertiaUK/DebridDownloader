@@ -146,6 +146,7 @@ export interface AppSettings {
   jellyfin_api_key?: string | null;
   emby_url?: string | null;
   emby_api_key?: string | null;
+  speed_limit_bytes?: number | null;
 }
 
 // ── Search ──
