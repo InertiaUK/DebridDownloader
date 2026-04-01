@@ -1,7 +1,5 @@
 # ⚡ DebridDownloader
 
-> **📢 Project Status:** DebridDownloader has reached v1.6.0 with Premiumize support, and this will be the final release. I can no longer afford the tooling costs to continue active development. It's been an incredible ride building this — from a simple downloader to a full media pipeline with rclone, symlinks, auto-organize, media server integration, and three debrid providers. Thank you to everyone who used it, filed issues, and believed in the project. All good things must come to an end. The app remains fully functional and the code is open source — fork it, improve it, make it yours. — *Jonathan / Casa Vargas*
-
 > 🚀 A blazing-fast, native desktop client for managing torrents and downloads through [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), and [Premiumize](https://premiumize.me). Built with Tauri, React, and Rust.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge)
