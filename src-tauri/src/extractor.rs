@@ -77,10 +77,6 @@ impl std::error::Error for ExtractError {}
 use regex::Regex;
 use std::sync::OnceLock;
 
-fn re_rar5() -> &'static Regex {
-    static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"^(?P<base>.+)\.part0*1\.rar$").unwrap())
-}
 fn re_rar5_any() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| Regex::new(r"^(?P<base>.+)\.part(?P<n>\d+)\.rar$").unwrap())
