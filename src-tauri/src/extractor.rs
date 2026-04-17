@@ -407,3 +407,70 @@ mod count_tests {
         assert_eq!(count_videos(d.path()), 1);
     }
 }
+
+// Stub - implemented in Task 11
+pub async fn extract(
+    _group: &ArchiveGroup,
+    _dest: &Path,
+    _rar_tool: RarTool,
+) -> Result<(), ExtractError> {
+    Err(ExtractError::UnsupportedFormat)
+}
+
+fn extract_zip(primary: &Path, dest: &Path) -> Result<(), ExtractError> {
+    std::fs::create_dir_all(dest).map_err(ExtractError::Io)?;
+    let file = std::fs::File::open(primary).map_err(ExtractError::Io)?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| ExtractError::BadArchive(e.to_string()))?;
+    archive.extract(dest)
+        .map_err(|e| ExtractError::BadArchive(e.to_string()))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod extract_zip_tests {
+    use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use tempfile::tempdir;
+    use zip::write::{SimpleFileOptions, ZipWriter};
+
+    fn build_zip(path: &Path, files: &[(&str, &[u8])]) {
+        let f = File::create(path).unwrap();
+        let mut zw = ZipWriter::new(f);
+        let opts = SimpleFileOptions::default();
+        for (name, content) in files {
+            zw.start_file(*name, opts).unwrap();
+            zw.write_all(content).unwrap();
+        }
+        zw.finish().unwrap();
+    }
+
+    #[test]
+    fn extract_zip_three_files() {
+        let d = tempdir().unwrap();
+        let archive = d.path().join("a.zip");
+        build_zip(&archive, &[
+            ("a.txt", b"A"), ("b.txt", b"BB"), ("c.txt", b"CCC"),
+        ]);
+        let dest = d.path().join("out");
+        extract_zip(&archive, &dest).unwrap();
+        assert_eq!(fs::read(dest.join("a.txt")).unwrap(), b"A");
+        assert_eq!(fs::read(dest.join("b.txt")).unwrap(), b"BB");
+        assert_eq!(fs::read(dest.join("c.txt")).unwrap(), b"CCC");
+    }
+
+    #[test]
+    fn extract_zip_truncated_errors() {
+        let d = tempdir().unwrap();
+        let archive = d.path().join("a.zip");
+        build_zip(&archive, &[("a.txt", b"A")]);
+        // Truncate to 20 bytes — breaks central directory
+        let bytes = fs::read(&archive).unwrap();
+        fs::write(&archive, &bytes[..20]).unwrap();
+        let dest = d.path().join("out");
+        let err = extract_zip(&archive, &dest).unwrap_err();
+        assert!(matches!(err, ExtractError::BadArchive(_)), "got {:?}", err);
+    }
+
+}
