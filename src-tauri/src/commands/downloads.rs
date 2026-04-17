@@ -481,7 +481,10 @@ pub async fn clear_completed_downloads(
     downloads.retain(|_, task| {
         matches!(
             task.status,
-            DownloadStatus::Pending | DownloadStatus::Downloading | DownloadStatus::Paused
+            DownloadStatus::Pending
+                | DownloadStatus::Downloading
+                | DownloadStatus::Paused
+                | DownloadStatus::Extracting
         )
     });
     Ok(())
