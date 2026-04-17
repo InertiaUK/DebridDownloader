@@ -1,6 +1,7 @@
 mod commands;
 mod providers;
 mod downloader;
+mod extractor;
 mod media_parser;
 mod media_servers;
 mod rclone;
