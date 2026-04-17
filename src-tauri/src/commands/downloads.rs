@@ -325,7 +325,7 @@ pub async fn start_downloads(
                                     });
 
                                 // Extract into <parent>/<basename-without-ext>/
-                                let base = archive_basename(&group.primary);
+                                let base = crate::extractor::archive_basename(&group.primary);
                                 let dest = parent.join(&base);
                                 match crate::extractor::extract(&group, &dest, task_rar_tool).await {
                                     Ok(()) => {
@@ -512,27 +512,6 @@ fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
-fn archive_basename(primary: &std::path::Path) -> String {
-    let name = primary.file_name().and_then(|n| n.to_str()).unwrap_or("archive");
-    // Strip known compound + single extensions
-    for ext in [".tar.gz", ".tar.xz", ".tar.bz2"] {
-        if let Some(stripped) = name.strip_suffix(ext) { return stripped.to_string(); }
-    }
-    // Strip .partN.rar → leave the base name
-    if let Some(caps) = regex::Regex::new(r"^(.+)\.part\d+\.rar$").unwrap().captures(name) {
-        return caps.get(1).unwrap().as_str().to_string();
-    }
-    // Strip .7z.NNN
-    if let Some(caps) = regex::Regex::new(r"^(.+)\.7z\.\d{3}$").unwrap().captures(name) {
-        return caps.get(1).unwrap().as_str().to_string();
-    }
-    // Default: strip final extension
-    std::path::Path::new(name)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(name)
-        .to_string()
-}
 
 fn find_single_video(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     const VIDEO_EXTS: &[&str] = &["mkv", "mp4", "avi", "mov", "m4v", "webm"];

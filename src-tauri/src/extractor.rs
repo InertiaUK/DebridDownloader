@@ -220,6 +220,28 @@ pub fn detect_rar_tool() -> RarTool {
     RarTool::None
 }
 
+/// Return the "base" name of an archive path, stripping part/split suffixes.
+/// Uses the OnceLock-cached regexes already defined in this module.
+pub fn archive_basename(primary: &Path) -> String {
+    let name = primary.file_name().and_then(|n| n.to_str()).unwrap_or("archive");
+    for ext in [".tar.gz", ".tar.xz", ".tar.bz2"] {
+        if let Some(stripped) = name.strip_suffix(ext) {
+            return stripped.to_string();
+        }
+    }
+    if let Some(caps) = re_rar5_any().captures(name) {
+        return caps.name("base").unwrap().as_str().to_string();
+    }
+    if let Some(caps) = re_7z_split().captures(name) {
+        return caps.name("base").unwrap().as_str().to_string();
+    }
+    Path::new(name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(name)
+        .to_string()
+}
+
 pub fn count_videos(dir: &Path) -> usize {
     const VIDEO_EXTS: &[&str] = &["mkv", "mp4", "avi", "mov", "m4v", "webm"];
     let mut count = 0;
