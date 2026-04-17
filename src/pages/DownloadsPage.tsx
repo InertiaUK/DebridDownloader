@@ -8,7 +8,7 @@ import type { DownloadTask } from "../types";
 import { formatBytes, formatSpeed, formatEta, getDownloadStatusText } from "../utils";
 
 function isActive(status: DownloadTask["status"]): boolean {
-  return status === "Downloading" || status === "Pending";
+  return status === "Downloading" || status === "Pending" || status === "Extracting";
 }
 
 function statusBadgeClass(status: DownloadTask["status"]): string {
