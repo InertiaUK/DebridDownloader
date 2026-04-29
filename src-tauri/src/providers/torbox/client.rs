@@ -36,6 +36,10 @@ impl TorBoxClient {
             .ok_or(shared::ProviderError::NotAuthenticated)
     }
 
+    pub async fn get_api_key(&self) -> Result<String, shared::ProviderError> {
+        self.get_key().await
+    }
+
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<TbApiResponse<T>, shared::ProviderError> {
         let key = self.get_key().await?;
         let url = format!("{}{}", BASE_URL, path);
@@ -350,5 +354,22 @@ impl DebridProvider for TorBoxClient {
         _limit: u32,
     ) -> Result<Vec<shared::DownloadItem>, shared::ProviderError> {
         Ok(vec![])
+    }
+
+    async fn check_availability(&self, hashes: &[String]) -> Result<Vec<String>, shared::ProviderError> {
+        if hashes.is_empty() {
+            return Ok(vec![]);
+        }
+        let hash_list = hashes.join(",");
+        let resp: TbApiResponse<Vec<String>> = self
+            .get(&format!(
+                "/torrents/checkcached?hash={}&format=list&list_files=false",
+                hash_list
+            ))
+            .await?;
+        match self.unwrap_response(resp) {
+            Ok(cached) => Ok(cached.into_iter().map(|h| h.to_lowercase()).collect()),
+            Err(_) => Ok(vec![]),
+        }
     }
 }
